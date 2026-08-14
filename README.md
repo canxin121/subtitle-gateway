@@ -30,10 +30,10 @@ FUNASR_PATH=/path/to/FunASR ./setup.sh
 | 端点 | 协议 | 说明 |
 |---|---|---|
 | `POST /v1/audio/transcriptions` | OpenAI | `-F file=@audio.wav -F model=sensevoice`(或 `fun-asr-mlt-nano`) |
-| `POST /transcribe` | ferrum | raw body,头 `x-model`/`x-compression`(pcm\|wav\|opus)/`x-encrypted`/`x-auth-token` |
+| `POST /transcribe` | ferrum | raw body,头 `x-model`/`x-language`(可选语言提示)/`x-compression`(pcm\|wav\|opus)/`x-encrypted`/`x-auth-token`;响应头回显 `x-model`/`x-language` |
 | `POST /v1/translate` | DeepL | header `Authorization: DeepL-Auth-Key {key}` |
 | `POST /translate` | LibreTranslate | body `api_key` 字段 |
-| `GET /v1/models` | OpenAI | 可用模型列表 |
+| `GET /v1/models` | OpenAI | 可用模型列表(每条含 `languages` 支持语言提示) |
 | `GET /health` | - | 健康检查 |
 
 ## CLI 参数

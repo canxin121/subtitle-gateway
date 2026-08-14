@@ -25,6 +25,9 @@ MODEL_CONFIGS = {
         "model": "iic/SenseVoiceSmall",
         "vad_model": "fsmn-vad",
         "vad_kwargs": {"max_single_segment_time": 30000},
+        # Advisory: which language codes the model accepts as a hint (zh/en/ja/
+        # ko/yue...). Not enforced — unknown values fall back to auto-detect.
+        "languages": ["zh", "en", "ja", "ko", "yue", "auto"],
     },
     "fun-asr-mlt-nano": {
         "model": "FunAudioLLM/Fun-ASR-MLT-Nano-2512",
@@ -32,6 +35,7 @@ MODEL_CONFIGS = {
         "trust_remote_code": True,
         "vad_model": "fsmn-vad",
         "vad_kwargs": {"max_single_segment_time": 30000},
+        "languages": ["zh", "en", "ja", "ko", "yue", "auto"],
     },
 }
 
@@ -48,6 +52,10 @@ def load_model(model_name: str):
     from funasr import AutoModel
 
     cfg = MODEL_CONFIGS[model_name].copy()
+    # Strip metadata keys that are not AutoModel kwargs (exposed via
+    # /v1/models) before splatting into the constructor.
+    for meta in ("languages",):
+        cfg.pop(meta, None)
     cfg["device"] = get_cfg().device
     cfg["disable_update"] = True
 

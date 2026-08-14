@@ -90,6 +90,7 @@ async def transcribe_ferrum(request: Request):
     Raw-body POST (no multipart), audio carried as-is in the body. Optional
     headers (all matching the Rust `stt_ferrum` client):
       - x-model:        model id (default "sensevoice")
+      - x-language:     language hint (ja/zh/en...; empty/absent = auto-detect)
       - x-compression:  pcm | wav | opus (default pcm)
       - x-encrypted:    "1" + AES-256-GCM encryption (--encryption-key)
       - x-auth-token:   hex(sha256(secret)) when --auth-secret is set
@@ -115,6 +116,9 @@ async def transcribe_ferrum(request: Request):
             f"unknown model '{model_name}'".encode(),
             status_code=400,
         )
+
+    # Optional language hint (e.g. "ja"/"zh"/"en"); empty/absent = auto-detect.
+    language = request.headers.get("x-language", "").strip() or None
 
     compression = request.headers.get("x-compression", "pcm")
     duration_ms = request.headers.get("x-duration-ms", "0")
@@ -150,7 +154,7 @@ async def transcribe_ferrum(request: Request):
 
     try:
         text, segments, elapsed = asr.run_transcription(
-            model_name, tmp_path, None, sentence_timestamp=True
+            model_name, tmp_path, language, sentence_timestamp=True
         )
         if not segments and text:
             segments = [{"start": 0, "end": elapsed, "text": text}]
@@ -165,11 +169,16 @@ async def transcribe_ferrum(request: Request):
             "x-metric-worker-ms": str(int(elapsed * 1000)),
             "x-bytes-in": str(bytes_in),
             "x-bytes-out": str(len(srt)),
+            # Echo back what was actually used so the client can log/verify.
+            "x-model": model_name,
         }
+        if language:
+            headers["x-language"] = language
         logger.info(
-            "Ferrum req %s model=%s duration_ms=%s wall=%.0fms resp=%dB",
+            "Ferrum req %s model=%s language=%s duration_ms=%s wall=%.0fms resp=%dB",
             request_id,
             model_name,
+            language or "auto",
             duration_ms,
             elapsed * 1000,
             len(srt),
@@ -226,7 +235,7 @@ async def translate_gateway_libretranslate(request: Request):
 async def list_models():
     """List available models (OpenAI-compatible)."""
     models = []
-    for name in asr.MODEL_CONFIGS:
+    for name, cfg in asr.MODEL_CONFIGS.items():
         models.append(
             {
                 "id": name,
@@ -234,6 +243,7 @@ async def list_models():
                 "created": 1700000000,
                 "owned_by": "funasr",
                 "ready": name in asr.MODEL_REGISTRY,
+                "languages": cfg.get("languages", []),
             }
         )
     return JSONResponse({"object": "list", "data": models})
