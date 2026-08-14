@@ -6,8 +6,11 @@ unit-tested offline. Returns (status_code, json_body, extra_headers).
 When no upstream is configured, the endpoints fall back to a list of free
 translation sources (--translate-free, default "google,edge") tried in order —
 big-company unofficial endpoints only, pure HTTP, no local models / inference:
-  - google: deep-translator library against Google's free web endpoint
-  - edge:   Microsoft Edge's undocumented /translate/translatetext endpoint
+  - google:   deep-translator library against Google's free web endpoint
+  - edge:     Microsoft Edge's undocumented /translate/translatetext endpoint
+  - alibaba:  translators library against translate.alibaba.com (no batch /
+              no auto-detect: only used when the client sends an explicit
+              source_lang / source; 'auto' falls through to google/edge)
 """
 
 import asyncio
@@ -154,6 +157,67 @@ async def _edge_translate(
     return 200, translated, None, _metric_headers(bytes_in, len(out), elapsed_ms)
 
 
+# translators (UlionTse) keeps ONE shared engine per provider (AlibabaV2
+# singleton with a mutable session/csrf_token), so concurrent to_thread calls
+# would race on the token. Serialize alibaba calls with a lock; the plugin's
+# buffer_unordered pipeline just has its alibaba requests queued briefly.
+_ALIBABA_LOCK = asyncio.Lock()
+
+
+def _alibaba_lang(code: str | None) -> str:
+    """Map DeepL/Libre codes to alibaba's: lowercase, region stripped
+    (en-GB->en, pt-BR->pt), Chinese -> zh (simplified) / zh-tw (traditional).
+    Empty/'auto' is NOT supported by alibaba (no auto-detect); the caller
+    must resolve an explicit source before calling."""
+    c = (code or "").strip().lower()
+    if c.startswith("zh") and ("tw" in c or "hant" in c or "繁" in c):
+        return "zh-tw"
+    if c.startswith("zh"):
+        return "zh"
+    return c.split("-")[0]
+
+
+async def _alibaba_translate(
+    texts: list[str], source: str, target: str, bytes_in: int
+) -> tuple[int, list[str] | None, str | None, dict]:
+    """Translate via translators' alibaba provider (translate.alibaba.com
+    /api/translate/text, CSRF-token session, free, no key, pure HTTP). No
+    batch API, so translate per text and reuse the provider's session; the
+    shared engine is lock-protected. No auto-detect either: callers must
+    resolve an explicit source (auto requests fall through to google/edge)."""
+    try:
+        import translators as ts
+    except ImportError:
+        return (
+            503,
+            None,
+            "alibaba source needs translators: pip install translators",
+            {},
+        )
+    src, tgt = _alibaba_lang(source), _alibaba_lang(target)
+    t0 = time.time()
+    translated: list[str] = []
+
+    def _run() -> list[str]:
+        return [
+            ts.translate_text(
+                t, translator="alibaba", from_language=src, to_language=tgt
+            )
+            for t in texts
+        ]
+
+    try:
+        async with _ALIBABA_LOCK:
+            translated = await asyncio.to_thread(_run)
+    except Exception as e:
+        logger.warning("Free alibaba translation failed: %s", e)
+        return 502, None, f"alibaba translation failed: {e}", {}
+
+    elapsed_ms = int((time.time() - t0) * 1000)
+    out = json.dumps(translated, ensure_ascii=False).encode()
+    return 200, translated, None, _metric_headers(bytes_in, len(out), elapsed_ms)
+
+
 async def _free_translate(
     texts: list[str], source: str, target: str, bytes_in: int
 ) -> tuple[int, list[str] | None, str | None, dict]:
@@ -172,6 +236,21 @@ async def _free_translate(
             )
         elif name == "edge":
             status, translated, err, headers = await _edge_translate(
+                texts, source, target, bytes_in
+            )
+        elif name == "alibaba":
+            # alibaba can't auto-detect: only attempt when the client sent an
+            # explicit source (else google/edge handle it). alibaba's own
+            # TranslatorError for bad language pairs falls through too.
+            if (source or "").lower() in ("", "auto"):
+                logger.warning(
+                    "Free source 'alibaba' skipped: no auto-detect (source=%r)",
+                    source,
+                )
+                if last is None:
+                    last = (400, "alibaba requires an explicit source language")
+                continue
+            status, translated, err, headers = await _alibaba_translate(
                 texts, source, target, bytes_in
             )
         else:

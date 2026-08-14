@@ -4,3 +4,4 @@ httpx==0.28.1
 python-multipart==0.0.32
 cryptography==50.0.0
 deep-translator==1.11.4
+translators==6.0.4

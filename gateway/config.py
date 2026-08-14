@@ -181,7 +181,7 @@ def parse_args(argv: list[str] | None = None) -> RuntimeConfig:
     parser.add_argument(
         "--translate-free",
         default="google,edge",
-        help="Free translation sources when no --translate-upstream/--libretranslate-upstream is set (applies to both endpoints). Comma-separated, tried in order: google (deep-translator) , edge (Microsoft Edge endpoint); e.g. 'google,edge' or 'edge' or 'none'",
+        help="Free translation sources when no --translate-upstream/--libretranslate-upstream is set (applies to both endpoints). Comma-separated, tried in order: google (deep-translator), edge (Microsoft Edge endpoint), alibaba (translate.alibaba.com via translators; explicit source_lang only, no auto-detect); e.g. 'google,edge' or 'alibaba,google,edge' or 'none'",
     )
     args = parser.parse_args(argv)
 

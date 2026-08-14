@@ -48,7 +48,7 @@ FUNASR_PATH=/path/to/FunASR ./setup.sh
 | `--encryption-key` | `""` | ferrum AES-256-GCM 口令 |
 | `--translate-upstream` / `-key` / `-api-key` | `""` | DeepL 网关:上游基址 / 发给上游的 key / 网关鉴权 key |
 | `--libretranslate-upstream` / `-key` / `-api-key` | `""` | LibreTranslate 网关:同上 |
-| `--translate-free` | `google,edge` | 未配上游时的免费翻译源列表(双端点生效,逗号分隔按序回退):`google`(deep-translator 调 Google 免费网页接口)\| `edge`(微软 Edge 免费接口)\| `none`(禁用) |
+| `--translate-free` | `google,edge` | 未配上游时的免费翻译源列表(双端点生效,逗号分隔按序回退):`google`(deep-translator 调 Google 免费网页接口)\| `edge`(微软 Edge 免费接口)\| `alibaba`(阿里 translate.alibaba.com,需显式 source_lang,无自动检测)\| `none`(禁用) |
 
 ## 免费翻译(零配置,大厂多源回退)
 
@@ -61,15 +61,19 @@ FUNASR_PATH=/path/to/FunASR ./setup.sh
 |---|---|---|
 | `google` | Google | `deep-translator` 库调 Google 免费网页接口;质量好、自动检测语言 |
 | `edge` | 微软 | Edge 内置翻译的免费接口 `edge.microsoft.com/translate/translatetext`,无需 key |
+| `alibaba` | 阿里 | `translators` 库调 translate.alibaba.com;**无自动检测**(`auto` 请求自动跳过它交给 google/edge),按句串行调用稍慢 |
 
 ```bash
 ./run.sh                              # 不配上游: google 优先, 被限/失败自动切 edge
 ./run.sh --translate-free edge        # 只用 edge
+./run.sh --translate-free alibaba,google,edge   # 阿里优先(需显式语言), auto 请求自动交 google/edge
 ./run.sh --translate-free none        # 禁用免费翻译(回到 503 "upstream not configured")
 ```
 
 配了上游则**仍优先走上游**(见下),免费源仅兜底。语言自动检测;DeepL 的
-`target_lang=ZH`/Libre 的 `target=zh` 均正确映射(google→`zh-CN`, edge→`zh-Hans`)。
+`target_lang=ZH`/Libre 的 `target=zh` 均正确映射(google→`zh-CN`, edge→`zh-Hans`,
+alibaba→`zh`/`zh-tw`)。`alibaba` 无自动检测:客户端带 `source_lang`/`source` 才走它,
+`auto` 请求自动跳过 alibaba 交给 google/edge。
 
 > 腾讯翻译君已关停(2025 年),免 key 接口不存在;腾讯云 TMT / TranSmart 需注册 key,
 > 可按"自定义上游"方式接入,不再属于零配置免费源。
