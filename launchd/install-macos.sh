@@ -18,8 +18,8 @@ fi
 
 LABEL="com.canxin.subtitle-gateway"
 REPO_DIR="$(pwd)"
-# 日志固定放 ~/Library/Logs (系统卷): launchd 无法在带 noowners 的外部卷
-# (如 /Volumes/*) 上打开 StandardOutPath, 会以 EX_CONFIG(78) 拒绝 spawn。
+# 日志固定放 ~/Library/Logs (系统卷)。仓库若在外部卷, launchd 服务首次访问
+# 外部卷会触发 TCC 授权弹窗, 批准后即可正常访问 (未批准则 spawn 失败 78)。
 LOG_DIR="$HOME/Library/Logs/subtitle-gateway"
 DEVICE="auto"
 PORT="8000"

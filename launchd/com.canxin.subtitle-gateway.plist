@@ -11,9 +11,9 @@
     __LOG_DIR__   日志目录 (安装为 ~/Library/Logs/subtitle-gateway)
   device 默认 auto: 优先 mps, 其次 cuda, 否则 cpu (纯 CPU 机器开箱即用)。
   KeepAlive: 崩溃自动重启 (ThrottleInterval 防疯狂重试)。
-  注意: StandardOutPath/StandardErrorPath 必须位于 launchd 可写卷(系统卷)。
-       仓库若在外部卷(如 /Volumes/*, 常带 noowners), launchd 无法打开日志文件,
-       spawn 会以 78 (EX_CONFIG) 失败, 因此日志固定写到 ~/Library/Logs。
+  注意: StandardOutPath/StandardErrorPath 固定写 ~/Library/Logs (系统卷)。
+       仓库若在外部卷(如 /Volumes/*), launchd 服务首次访问外部卷会触发 TCC
+       授权弹窗, 批准后即可正常访问 (未批准则 spawn 失败 EX_CONFIG/78)。
 -->
 <dict>
     <key>Label</key>

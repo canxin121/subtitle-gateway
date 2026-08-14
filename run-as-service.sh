@@ -1,9 +1,9 @@
 #!/bin/bash
 # 以用户上下文后台守护运行 subtitle-gateway (start/stop/restart/status)。
 #
-# 为什么需要它: launchd 服务进程无法访问外部卷 (/Volumes/*, macOS TCC 限制) —
-# 不能加载外部卷上的二进制、也不能写外部卷日志。仓库若在外部卷 (如本机
-# /Volumes/Rc20), launchd 方案装不上, 用本脚本:
+# 为什么需要它: launchd 服务进程访问外部卷 (/Volumes/*) 会触发 TCC 授权弹窗,
+# 需要人在场点击"允许"。若不方便处理弹窗 (无人值守 / 不想每次确认), 用本脚本
+# 以用户上下文后台守护 (无需授权弹窗, 仓库在外部卷也可用):
 #   1. ./run-as-service.sh start      # 后台运行 (看门狗: 崩溃 5 秒后自动重启)
 #   2. 开机自启: 系统设置 > 通用 > 登录项 > "+" 添加本脚本 (勾选启动)
 #   3. ./run-as-service.sh status     # 查看状态 + /health

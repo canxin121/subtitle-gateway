@@ -103,7 +103,7 @@ sudo ./install-systemd.sh --cache-dir /path/to/models_cache
 - 查看状态:`launchctl print gui/$(id -u)/com.canxin.subtitle-gateway`
 - 安装脚本会先检查端口占用——`KeepAlive` 会对启动失败的实例反复重试,请先释放端口再安装。
 
-**仓库在外部卷**(如 `/Volumes/...`)→ macOS 的 launchd 服务进程**无法访问外部卷**(TCC 限制:加载外部卷二进制会卡死在 dyld、也无法写外部卷日志),请用用户上下文守护脚本:
+**仓库在外部卷**(如 `/Volumes/...`)→ launchd 服务首次访问外部卷会弹出 **TCC 授权窗口**,点击"允许"后即可正常访问;若不方便处理弹窗(无人值守/不想每次确认),用用户上下文守护脚本:
 
 ```bash
 ./run-as-service.sh start                        # 后台运行 + 看门狗(崩溃 5s 自动重启)
