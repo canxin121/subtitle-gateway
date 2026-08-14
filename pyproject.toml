@@ -1,0 +1,16 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "subtitle-gateway"
+version = "0.1.0"
+description = "Unified gateway: FunASR ASR (OpenAI + ferrum) and translation (DeepL + LibreTranslate)"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+
+[project.scripts]
+subtitle-gateway = "gateway.server:main"
+
+[tool.setuptools]
+packages = ["gateway"]
