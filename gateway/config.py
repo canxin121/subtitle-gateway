@@ -17,7 +17,7 @@ logger = logging.getLogger(__name__)
 class RuntimeConfig:
     host: str = "0.0.0.0"
     port: int = 8000
-    device: str = "mps"
+    device: str = "auto"  # "auto" | "cpu" | "mps" | "cuda"; auto = first available
     preload: list = field(default_factory=list)
     cache_dir: Path = field(default_factory=lambda: default_cache_dir())
     # ferrum protocol
@@ -73,13 +73,56 @@ def setup_logging() -> None:
     )
 
 
+def resolve_device(device: str) -> str:
+    """Resolve the runtime device, falling back to cpu when the requested
+    device is unavailable (pure-CPU servers, Intel Macs without MPS, no CUDA).
+
+    - "auto"          -> first available of mps / cuda / cpu
+    - "mps" | "cuda"  -> kept if verified available, else cpu (logged)
+    - "cpu"           -> as-is
+    """
+    try:
+        import torch
+    except ImportError:
+        # torch not installed (e.g. --help / import-only contexts): only cpu is possible.
+        return "cpu"
+
+    def _available(name: str) -> bool:
+        if name == "mps":
+            return bool(torch.backends.mps.is_available())
+        if name == "cuda":
+            return bool(torch.cuda.is_available())
+        return name == "cpu"
+
+    if device == "auto":
+        for cand in ("mps", "cuda", "cpu"):
+            if _available(cand):
+                return cand
+        return "cpu"
+
+    if _available(device):
+        return device
+
+    logger.warning(
+        "Device '%s' unavailable (mps=%s cuda=%s) — falling back to 'cpu'",
+        device,
+        torch.backends.mps.is_available(),
+        torch.cuda.is_available(),
+    )
+    return "cpu"
+
+
 def parse_args(argv: list[str] | None = None) -> RuntimeConfig:
     parser = argparse.ArgumentParser(
         description="subtitle-gateway: FunASR ASR (OpenAI + ferrum) and translation (DeepL + LibreTranslate) gateway"
     )
     parser.add_argument("--host", default="0.0.0.0", help="Bind host")
     parser.add_argument("--port", type=int, default=8000, help="Bind port")
-    parser.add_argument("--device", default="mps", help="Device: cuda, cpu, mps")
+    parser.add_argument(
+        "--device",
+        default="auto",
+        help="Device: auto (default; first available of mps/cuda/cpu), cpu, mps, cuda. Unavailable explicit devices fall back to cpu so pure-CPU servers work out of the box",
+    )
     parser.add_argument(
         "--preload",
         nargs="*",

@@ -1,7 +1,9 @@
 .venv/
 models_cache
+logs/
 __pycache__/
 *.pyc
 .pytest_cache/
 .DS_Store
 *.egg-info/
+.gateway.pid

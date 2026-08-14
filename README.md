@@ -17,11 +17,12 @@
 # 想要精确复现本地 FunASR 开发版行为, 用 editable:
 FUNASR_PATH=/path/to/FunASR ./setup.sh
 
-# 2. 一键启动 (MPS, 端口 8000, 预载两个模型)
+# 2. 一键启动 (device 默认 auto: 有 MPS 用 MPS, 否则 CPU; 端口 8000, 预载两个模型)
 ./run.sh
 
-# 或指定端口/CPU/复用旧模型缓存
+# 或指定端口/设备/复用旧模型缓存 (--cpu 等价 --device cpu)
 ./run.sh --port 9000 --cpu --cache-dir /path/to/old/models_cache
+./run.sh --device cuda   # 有 NVIDIA GPU 的服务器
 ```
 
 ## 端点
@@ -40,7 +41,7 @@ FUNASR_PATH=/path/to/FunASR ./setup.sh
 | 参数 | 默认 | 说明 |
 |---|---|---|
 | `--host` / `--port` | `0.0.0.0` / `8000` | 监听地址 |
-| `--device` | `mps` | `cuda` \| `cpu` \| `mps` |
+| `--device` | `auto` | `auto`(首个可用 mps/cuda/cpu)\| `cpu` \| `mps` \| `cuda`;显式设备不可用时**自动回退 `cpu`**,纯 CPU 服务器开箱即用 |
 | `--preload` | `fun-asr-mlt-nano sensevoice` | 启动预载模型(裸 `--preload` = 不加载) |
 | `--cache-dir` | 仓库根 `models_cache/` | 模型缓存目录(设 MODELSCOPE_CACHE + HF_HOME) |
 | `--auth-secret` | `""` | ferrum 鉴权(客户端发 `x-auth-token = sha256(secret)`) |
@@ -74,16 +75,52 @@ ln -s /path/to/old/models_cache models_cache
 ./run.sh --cache-dir /path/to/old/models_cache
 ```
 
-## systemd(Linux)
+## 服务安装
+
+### systemd(Linux)
 
 ```bash
 # 前置: 已运行 ./setup.sh
-sudo ./install-systemd.sh                          # 系统级, 开机自启
+sudo ./install-systemd.sh                          # 系统级, 开机自启 (device 默认 cpu)
+sudo ./install-systemd.sh --device cuda            # 有 NVIDIA GPU 的服务器
 sudo ./install-systemd.sh --cache-dir /path/to/models_cache
 ./install-systemd.sh --user                        # 用户级
 ```
 
 需要 `libopus0`(Opus 解码):`sudo apt install libopus0`。若 venv 用 `FUNASR_PATH` editable 构建,请确保该路径在服务运行时仍可访问。
+
+### macOS
+
+**仓库在系统卷**(如 `~/Projects/...`)→ 用 launchd LaunchAgent:
+
+```bash
+./launchd/install-macos.sh                        # 安装为 LaunchAgent (device 默认 auto)
+./launchd/install-macos.sh --device mps --cache-dir /path/to/models_cache
+./launchd/install-macos.sh --uninstall           # 卸载
+```
+
+- plist:`~/Library/LaunchAgents/com.canxin.subtitle-gateway.plist`;日志:`~/Library/Logs/subtitle-gateway/`
+- 查看状态:`launchctl print gui/$(id -u)/com.canxin.subtitle-gateway`
+- 安装脚本会先检查端口占用——`KeepAlive` 会对启动失败的实例反复重试,请先释放端口再安装。
+
+**仓库在外部卷**(如 `/Volumes/...`)→ macOS 的 launchd 服务进程**无法访问外部卷**(TCC 限制:加载外部卷二进制会卡死在 dyld、也无法写外部卷日志),请用用户上下文守护脚本:
+
+```bash
+./run-as-service.sh start                        # 后台运行 + 看门狗(崩溃 5s 自动重启)
+./run-as-service.sh status                       # 状态 + /health
+./run-as-service.sh stop
+./run-as-service.sh start --port 8000 --device auto   # 可传 gateway 参数
+# 开机自启: 系统设置 > 通用 > 登录项 > "+" 添加 /path/to/subtitle-gateway/run-as-service.sh
+#   (选"打开时启动"; 登录项以用户会话启动, 可正常访问外部卷)
+```
+
+- 日志:仓库内 `logs/gateway.log` / `logs/gateway-error.log`(外部卷,用户上下文可写)
+
+## 无 GPU / 纯 CPU 服务器
+
+- `--device` 默认 `auto`:优先 `mps`(Apple Silicon)→ `cuda` → `cpu`;显式 `--device mps`/`cuda` 在不可用机器上**自动回退 `cpu`** 并打 warning,无需改配置。
+- Linux systemd 默认 `--device cpu`;macOS launchd 默认 auto。
+- 纯 CPU 上推理较慢属预期(SenseVoice 每句数秒),模型加载同样从缓存命中。
 
 ## funasr 安装策略
 

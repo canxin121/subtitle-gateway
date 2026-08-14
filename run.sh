@@ -1,10 +1,11 @@
 #!/bin/bash
-# 一键启动 subtitle-gateway (FunASR ASR + 翻译网关, MPS/CPU)
-# 用法: ./run.sh [--port 8000] [--device mps] [--cpu] [--cache-dir <dir>] [其他 gateway 参数...]
+# 一键启动 subtitle-gateway (FunASR ASR + 翻译网关, auto/MPS/CPU/CUDA)
+# 用法: ./run.sh [--port 8000] [--device auto] [--cpu] [--cache-dir <dir>] [其他 gateway 参数...]
+# device 默认 auto: 优先 mps(Apple Silicon), 其次 cuda, 否则 cpu;纯 CPU 服务器开箱即用
 set -euo pipefail
 cd "$(dirname "$0")"
 
-DEVICE=mps
+DEVICE=auto
 PORT=8000
 EXTRA=()
 while [[ $# -gt 0 ]]; do

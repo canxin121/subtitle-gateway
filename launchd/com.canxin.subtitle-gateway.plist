@@ -1,0 +1,48 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<!--
+  subtitle-gateway launchd LaunchAgent 模板 (macOS)。
+  占位符由 launchd/install-macos.sh 在安装时替换:
+    __REPO_DIR__  仓库绝对路径
+    __DEVICE__    auto | mps | cuda | cpu
+    __PORT__      监听端口
+    __CACHE_ARG__ 可选 --cache-dir 参数 (install-macos.sh --cache-dir 时填充)
+    __LOG_DIR__   日志目录 (安装为 ~/Library/Logs/subtitle-gateway)
+  device 默认 auto: 优先 mps, 其次 cuda, 否则 cpu (纯 CPU 机器开箱即用)。
+  KeepAlive: 崩溃自动重启 (ThrottleInterval 防疯狂重试)。
+  注意: StandardOutPath/StandardErrorPath 必须位于 launchd 可写卷(系统卷)。
+       仓库若在外部卷(如 /Volumes/*, 常带 noowners), launchd 无法打开日志文件,
+       spawn 会以 78 (EX_CONFIG) 失败, 因此日志固定写到 ~/Library/Logs。
+-->
+<dict>
+    <key>Label</key>
+    <string>com.canxin.subtitle-gateway</string>
+    <key>ProgramArguments</key>
+    <array>
+        <string>__REPO_DIR__/.venv/bin/python</string>
+        <string>-m</string>
+        <string>gateway</string>
+        <string>--device</string>
+        <string>__DEVICE__</string>
+        <string>--port</string>
+        <string>__PORT__</string>
+        <string>--preload</string>
+        <string>fun-asr-mlt-nano</string>
+        <string>sensevoice</string>
+        <!-- __CACHE_ARG__ -->
+    </array>
+    <key>WorkingDirectory</key>
+    <string>__REPO_DIR__</string>
+    <key>RunAtLoad</key>
+    <true/>
+    <key>KeepAlive</key>
+    <true/>
+    <key>ThrottleInterval</key>
+    <integer>10</integer>
+    <key>StandardOutPath</key>
+    <string>__LOG_DIR__/gateway.log</string>
+    <key>StandardErrorPath</key>
+    <string>__LOG_DIR__/gateway-error.log</string>
+</dict>
+</plist>

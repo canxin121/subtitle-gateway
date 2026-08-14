@@ -256,6 +256,16 @@ def main():
     # Assign to config.CURRENT, not a local server-module global, so get_cfg()
     # (used by request handlers) sees the CLI-parsed config.
     _config.CURRENT = cfg
+    # Resolve "auto"/unavailable devices to a runnable one before models load,
+    # so pure-CPU servers (no MPS/CUDA) work without touching the config.
+    requested = cfg.device
+    cfg.device = _config.resolve_device(cfg.device)
+    if cfg.device != requested:
+        logger.warning(
+            "Requested device '%s' unavailable — falling back to '%s'",
+            requested,
+            cfg.device,
+        )
     apply_cache_env(cfg.cache_dir)
 
     # Pre-load default model(s)

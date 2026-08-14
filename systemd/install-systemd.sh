@@ -1,24 +1,27 @@
 #!/bin/bash
 # 安装 subtitle-gateway 为 systemd 服务 (仅 Linux)
 # 用法:
-#   sudo ./install-systemd.sh [--cache-dir /path/to/models_cache] [--user]
+#   sudo ./install-systemd.sh [--device cpu] [--cache-dir /path/to/models_cache] [--user]
+# --device 默认 cpu (纯 CPU 服务器开箱即用); 有 NVIDIA GPU 可传 cuda
 # 前置: 已在本仓库根运行过 ./setup.sh (venv 就绪)
 set -euo pipefail
 cd "$(dirname "$0")"
 
 if [ "$(uname -s)" != "Linux" ]; then
-  echo "systemd 仅支持 Linux (当前: $(uname -s))。macOS 用 ./run.sh 启动。"
+  echo "systemd 仅支持 Linux (当前: $(uname -s))。macOS 用 ./launchd/install-macos.sh。"
   exit 1
 fi
 
 UNIT="subtitle-gateway"
 REPO_DIR="$(cd .. && pwd)"
 USER_NAME="$(id -un)"
+DEVICE="cpu"
 CACHE_LINE=""
 MODE="system"
 ARGS=()
 while [[ $# -gt 0 ]]; do
   case "$1" in
+    --device) DEVICE="$2"; shift 2 ;;
     --cache-dir) CACHE_LINE="Environment=SUBTITLE_GATEWAY_CACHE_DIR=$2"; shift 2 ;;
     --user) MODE="user"; shift ;;
     *) ARGS+=("$1"); shift ;;
@@ -33,6 +36,7 @@ fi
 
 sed -e "s|__USER__|$USER_NAME|g" \
     -e "s|__REPO_DIR__|$REPO_DIR|g" \
+    -e "s|__DEVICE__|$DEVICE|g" \
     -e "s|# __CACHE_LINE__.*|$CACHE_LINE|" \
     subtitle-gateway.service > "/tmp/$UNIT.service"
 
