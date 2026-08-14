@@ -281,7 +281,7 @@ def main():
             f"  Translation upstream: {cfg.translate_upstream} (auth={bool(cfg.translate_api_key)})"
         )
     elif cfg.translate_free != "none":
-        logger.info(f"  Translation: free source '{cfg.translate_free}' (no --translate-upstream)")
+        logger.info(f"  Translation: free sources [{cfg.translate_free}] (no --translate-upstream)")
     else:
         logger.info("  Translation gateway: disabled (no --translate-upstream)")
     if cfg.libretranslate_upstream:
@@ -289,7 +289,7 @@ def main():
             f"  LibreTranslate upstream: {cfg.libretranslate_upstream} (auth={bool(cfg.libretranslate_api_key)})"
         )
     elif cfg.translate_free != "none":
-        logger.info(f"  LibreTranslate: free source '{cfg.translate_free}' (no --libretranslate-upstream)")
+        logger.info(f"  LibreTranslate: free sources [{cfg.translate_free}] (no --libretranslate-upstream)")
     else:
         logger.info("  LibreTranslate gateway: disabled (no --libretranslate-upstream)")
     logger.info(f"  Docs:   http://{cfg.host}:{cfg.port}/docs")

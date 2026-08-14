@@ -3,9 +3,11 @@ serve_dual.py. Each function decouples the endpoint body (auth / parse /
 forward / error mapping / metric headers) from the HTTP envelope so it can be
 unit-tested offline. Returns (status_code, json_body, extra_headers).
 
-When no upstream is configured, the endpoints fall back to a free translation
-source (--translate-free, default google) via the `deep-translator` library —
-pure HTTP against Google's free web endpoint, no local models / inference.
+When no upstream is configured, the endpoints fall back to a list of free
+translation sources (--translate-free, default "google,edge") tried in order —
+big-company unofficial endpoints only, pure HTTP, no local models / inference:
+  - google: deep-translator library against Google's free web endpoint
+  - edge:   Microsoft Edge's undocumented /translate/translatetext endpoint
 """
 
 import asyncio
@@ -65,21 +67,19 @@ def _google_error_status(exc: Exception) -> int:
     return 502
 
 
-async def _free_translate(
+async def _google_translate(
     texts: list[str], source: str, target: str, bytes_in: int
 ) -> tuple[int, list[str] | None, str | None, dict]:
     """Translate via deep-translator's GoogleTranslator (free web endpoint,
-    pure HTTP, no local inference). Called when no --translate-upstream is
-    configured. deep-translator is sync (requests), so run in a thread.
-
-    Returns (status, translated_list | None, error_msg | None, headers)."""
+    pure HTTP, no local inference). deep-translator is sync (requests), so run
+    in a thread. Returns (status, translated_list|None, error_msg|None, headers)."""
     try:
         from deep_translator import GoogleTranslator
     except ImportError:
         return (
             503,
             None,
-            "free translation needs deep-translator: pip install deep-translator",
+            "google source needs deep-translator: pip install deep-translator",
             {},
         )
     src, tgt = _google_lang(source), _google_lang(target)
@@ -91,12 +91,98 @@ async def _free_translate(
     try:
         translated = await asyncio.to_thread(_run)
     except Exception as e:
-        logger.warning("Free Google translation failed: %s", e)
-        return _google_error_status(e), None, f"free translation failed: {e}", {}
+        logger.warning("Free google translation failed: %s", e)
+        return _google_error_status(e), None, f"google translation failed: {e}", {}
 
     elapsed_ms = int((time.time() - t0) * 1000)
     out = json.dumps(translated, ensure_ascii=False).encode()
     return 200, translated, None, _metric_headers(bytes_in, len(out), elapsed_ms)
+
+
+_EDGE_URL = "https://edge.microsoft.com/translate/translatetext"
+
+
+def _edge_lang(code: str | None) -> str:
+    """Map DeepL/Libre codes to Edge's BCP-47: lowercase, region stripped,
+    Chinese -> zh-Hans (simplified). Empty/'auto' -> "" (Edge auto-detects
+    when `from` is empty)."""
+    c = (code or "").strip().lower()
+    if not c or c == "auto":
+        return ""
+    if c.startswith("zh"):
+        return "zh-Hans"
+    return c.split("-")[0]
+
+
+async def _edge_translate(
+    texts: list[str], source: str, target: str, bytes_in: int
+) -> tuple[int, list[str] | None, str | None, dict]:
+    """Translate via Microsoft Edge's undocumented /translate/translatetext
+    endpoint (free, no key, pure HTTP). Body is a bare JSON array; response is
+    an array with one {translations:[{text}]} per input, same order."""
+    src, tgt = _edge_lang(source), _edge_lang(target)
+    params = {"from": src, "to": tgt, "isEnterpriseClient": "false"}
+    t0 = time.time()
+    try:
+        resp = await translate_client().post(
+            _EDGE_URL,
+            params=params,
+            json=texts,
+            headers={"Content-Type": "application/json"},
+        )
+    except httpx.HTTPError as e:
+        logger.warning("Edge translation request failed: %s", e)
+        return 502, None, f"edge translation request failed: {e}", {}
+    elapsed_ms = int((time.time() - t0) * 1000)
+
+    try:
+        data = resp.json()
+    except (json.JSONDecodeError, ValueError):
+        return 502, None, "invalid edge response", {}
+    if resp.status_code >= 400:
+        return resp.status_code, None, f"edge error: HTTP {resp.status_code}", {}
+    if not isinstance(data, list):
+        return 502, None, "invalid edge response: not a list", {}
+    try:
+        translated = [item["translations"][0]["text"] for item in data]
+    except (KeyError, IndexError, TypeError):
+        return 502, None, "invalid edge response shape", {}
+    if len(translated) != len(texts):
+        return 502, None, "edge response count mismatch", {}
+
+    out = json.dumps(translated, ensure_ascii=False).encode()
+    return 200, translated, None, _metric_headers(bytes_in, len(out), elapsed_ms)
+
+
+async def _free_translate(
+    texts: list[str], source: str, target: str, bytes_in: int
+) -> tuple[int, list[str] | None, str | None, dict]:
+    """Try each configured free source (--translate-free, comma-separated) in
+    order; the first 200 wins. If one fails (rate-limited / down / unsupported
+    pair) it falls through to the next. Returns
+    (status, translated_list|None, error_msg|None, headers)."""
+    sources = [s.strip() for s in get_cfg().translate_free.split(",") if s.strip()]
+    if not sources:
+        return 503, None, "no free translation source configured", {}
+    last: tuple[int, str] | None = None
+    for name in sources:
+        if name == "google":
+            status, translated, err, headers = await _google_translate(
+                texts, source, target, bytes_in
+            )
+        elif name == "edge":
+            status, translated, err, headers = await _edge_translate(
+                texts, source, target, bytes_in
+            )
+        else:
+            logger.warning("Unknown free translation source '%s'", name)
+            continue
+        if status == 200:
+            return 200, translated, None, headers
+        last = (status, err or "unknown error")
+        logger.warning("Free source '%s' failed (%s): %s", name, status, err)
+    st, er = last or (502, "all free sources failed")
+    return st, None, er, {}
 
 
 async def deepl_translate(raw: bytes, authorization: str) -> tuple[int, dict, dict]:

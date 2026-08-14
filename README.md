@@ -48,24 +48,33 @@ FUNASR_PATH=/path/to/FunASR ./setup.sh
 | `--encryption-key` | `""` | ferrum AES-256-GCM 口令 |
 | `--translate-upstream` / `-key` / `-api-key` | `""` | DeepL 网关:上游基址 / 发给上游的 key / 网关鉴权 key |
 | `--libretranslate-upstream` / `-key` / `-api-key` | `""` | LibreTranslate 网关:同上 |
-| `--translate-free` | `google` | 未配上游时的免费翻译源(双端点生效):`google`(deep-translator 调 Google 免费网页接口,纯 HTTP 无本地推理)\| `none`(禁用) |
+| `--translate-free` | `google,edge` | 未配上游时的免费翻译源列表(双端点生效,逗号分隔按序回退):`google`(deep-translator 调 Google 免费网页接口)\| `edge`(微软 Edge 免费接口)\| `none`(禁用) |
 
-## 免费翻译(零配置,Google)
+## 免费翻译(零配置,大厂多源回退)
 
 未配置任何 `--translate-upstream`/`--libretranslate-upstream` 时,两个翻译端点
 (`/v1/translate` DeepL 协议 与 `/translate` LibreTranslate 协议)**自动回退到免费
-Google 翻译** —— 经 `deep-translator` 库调用 Google 免费网页接口,**纯 HTTP、无
-本地模型推理**。mpv 插件无需任何改动。
+翻译源列表**(默认 `google,edge`,逗号分隔按序尝试,首个成功即用)**纯 HTTP、无本地
+模型推理**。mpv 插件无需任何改动。
+
+| 源 | 大厂 | 说明 |
+|---|---|---|
+| `google` | Google | `deep-translator` 库调 Google 免费网页接口;质量好、自动检测语言 |
+| `edge` | 微软 | Edge 内置翻译的免费接口 `edge.microsoft.com/translate/translatetext`,无需 key |
 
 ```bash
-./run.sh                      # 不配上游: /v1/translate 与 /translate 直接可用(Google)
-./run.sh --translate-free none   # 禁用免费翻译(回到 503 "upstream not configured")
+./run.sh                              # 不配上游: google 优先, 被限/失败自动切 edge
+./run.sh --translate-free edge        # 只用 edge
+./run.sh --translate-free none        # 禁用免费翻译(回到 503 "upstream not configured")
 ```
 
 配了上游则**仍优先走上游**(见下),免费源仅兜底。语言自动检测;DeepL 的
-`target_lang=ZH`/Libre 的 `target=zh` 均正确映射到 Google(`zh-CN`)。
+`target_lang=ZH`/Libre 的 `target=zh` 均正确映射(google→`zh-CN`, edge→`zh-Hans`)。
 
-> 注意:走 Google 免费接口是抓取型用法(非官方付费 API),文本会发往 Google,
+> 腾讯翻译君已关停(2025 年),免 key 接口不存在;腾讯云 TMT / TranSmart 需注册 key,
+> 可按"自定义上游"方式接入,不再属于零配置免费源。
+>
+> 注意:走大厂免费网页接口是抓取型用法(非官方付费 API),文本会发往对应厂商,
 > 大厂级质量但无 SLA、偶有限流;需要稳定/私有时请配置自己的上游。
 
 ## 翻译网关示例(自定义上游)

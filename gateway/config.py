@@ -31,9 +31,10 @@ class RuntimeConfig:
     libretranslate_upstream: str = ""
     libretranslate_upstream_key: str = ""
     libretranslate_api_key: str = ""
-    # Free translation source used when the corresponding upstream is unset
-    # (applies to both /v1/translate and /translate): "google" | "none"
-    translate_free: str = "google"
+    # Free translation sources used when the corresponding upstream is unset
+    # (applies to both /v1/translate and /translate). Comma-separated list,
+    # tried in order; first success wins. "none" disables.
+    translate_free: str = "google,edge"
 
 
 # Singleton populated by main() before the server starts. Handlers must read it
@@ -179,8 +180,8 @@ def parse_args(argv: list[str] | None = None) -> RuntimeConfig:
     )
     parser.add_argument(
         "--translate-free",
-        default="google",
-        help="Free translation source when no --translate-upstream/--libretranslate-upstream is set (applies to both endpoints): google (default, via deep-translator, pure HTTP) | none",
+        default="google,edge",
+        help="Free translation sources when no --translate-upstream/--libretranslate-upstream is set (applies to both endpoints). Comma-separated, tried in order: google (deep-translator) , edge (Microsoft Edge endpoint); e.g. 'google,edge' or 'edge' or 'none'",
     )
     args = parser.parse_args(argv)
 
