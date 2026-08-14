@@ -16,7 +16,7 @@ if [ ! -x .venv/bin/python ]; then
   exit 1
 fi
 
-LABEL="com.canxin.subtitle-gateway"
+LABEL="com.subtitle-gateway"
 REPO_DIR="$(pwd)"
 # 日志固定放 ~/Library/Logs (系统卷)。仓库若在外部卷, launchd 服务首次访问
 # 外部卷会触发 TCC 授权弹窗, 批准后即可正常访问 (未批准则 spawn 失败 78)。
@@ -57,7 +57,7 @@ sed -e "s|__REPO_DIR__|$REPO_DIR|g" \
     -e "s|__PORT__|$PORT|g" \
     -e "s|__LOG_DIR__|$LOG_DIR|g" \
     -e "s|<!-- __CACHE_ARG__ -->|$CACHE_ARG|" \
-    launchd/com.canxin.subtitle-gateway.plist > "$PLIST_DEST"
+    launchd/com.subtitle-gateway.plist > "$PLIST_DEST"
 
 plutil -lint "$PLIST_DEST" || { echo "错误: 生成的 plist 校验失败" >&2; exit 1; }
 
