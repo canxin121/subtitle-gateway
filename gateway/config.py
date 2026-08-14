@@ -31,6 +31,9 @@ class RuntimeConfig:
     libretranslate_upstream: str = ""
     libretranslate_upstream_key: str = ""
     libretranslate_api_key: str = ""
+    # Free translation source used when the corresponding upstream is unset
+    # (applies to both /v1/translate and /translate): "google" | "none"
+    translate_free: str = "google"
 
 
 # Singleton populated by main() before the server starts. Handlers must read it
@@ -174,6 +177,11 @@ def parse_args(argv: list[str] | None = None) -> RuntimeConfig:
         default="",
         help="Gateway auth for /translate: clients must send this key in the body api_key field; empty disables auth",
     )
+    parser.add_argument(
+        "--translate-free",
+        default="google",
+        help="Free translation source when no --translate-upstream/--libretranslate-upstream is set (applies to both endpoints): google (default, via deep-translator, pure HTTP) | none",
+    )
     args = parser.parse_args(argv)
 
     return RuntimeConfig(
@@ -190,4 +198,5 @@ def parse_args(argv: list[str] | None = None) -> RuntimeConfig:
         libretranslate_upstream=args.libretranslate_upstream,
         libretranslate_upstream_key=args.libretranslate_upstream_key,
         libretranslate_api_key=args.libretranslate_api_key,
+        translate_free=args.translate_free,
     )

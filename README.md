@@ -48,8 +48,27 @@ FUNASR_PATH=/path/to/FunASR ./setup.sh
 | `--encryption-key` | `""` | ferrum AES-256-GCM 口令 |
 | `--translate-upstream` / `-key` / `-api-key` | `""` | DeepL 网关:上游基址 / 发给上游的 key / 网关鉴权 key |
 | `--libretranslate-upstream` / `-key` / `-api-key` | `""` | LibreTranslate 网关:同上 |
+| `--translate-free` | `google` | 未配上游时的免费翻译源(双端点生效):`google`(deep-translator 调 Google 免费网页接口,纯 HTTP 无本地推理)\| `none`(禁用) |
 
-## 翻译网关示例
+## 免费翻译(零配置,Google)
+
+未配置任何 `--translate-upstream`/`--libretranslate-upstream` 时,两个翻译端点
+(`/v1/translate` DeepL 协议 与 `/translate` LibreTranslate 协议)**自动回退到免费
+Google 翻译** —— 经 `deep-translator` 库调用 Google 免费网页接口,**纯 HTTP、无
+本地模型推理**。mpv 插件无需任何改动。
+
+```bash
+./run.sh                      # 不配上游: /v1/translate 与 /translate 直接可用(Google)
+./run.sh --translate-free none   # 禁用免费翻译(回到 503 "upstream not configured")
+```
+
+配了上游则**仍优先走上游**(见下),免费源仅兜底。语言自动检测;DeepL 的
+`target_lang=ZH`/Libre 的 `target=zh` 均正确映射到 Google(`zh-CN`)。
+
+> 注意:走 Google 免费接口是抓取型用法(非官方付费 API),文本会发往 Google,
+> 大厂级质量但无 SLA、偶有限流;需要稳定/私有时请配置自己的上游。
+
+## 翻译网关示例(自定义上游)
 
 ```bash
 ./run.sh --port 8000 \
