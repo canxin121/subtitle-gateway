@@ -54,8 +54,8 @@ async def transcribe(
     # Save uploaded file
     suffix = os.path.splitext(file.filename)[1] if file.filename else ".wav"
     with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp:
-        content = await file.read()
-        tmp.write(content)
+        while chunk := await file.read(1024 * 1024):
+            tmp.write(chunk)
         tmp_path = tmp.name
 
     try:
@@ -257,6 +257,7 @@ async def health():
         "device": get_cfg().device,
         "models_loaded": list(asr.MODEL_REGISTRY.keys()),
         "models_available": list(asr.MODEL_CONFIGS.keys()),
+        "accelerator_memory": asr.accelerator_memory_stats(),
     }
 
 

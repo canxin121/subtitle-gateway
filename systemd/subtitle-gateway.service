@@ -10,7 +10,7 @@ WorkingDirectory=__REPO_DIR__
 # __CACHE_LINE__   # 可选: Environment=SUBTITLE_GATEWAY_CACHE_DIR=/path/to/models_cache
 # 注意: funasr editable 分支要求 venv 由 FUNASR_PATH 构建; Linux 需 libopus (apt install libopus0)
 # __DEVICE__ 默认 cpu(纯 CPU 服务器开箱即用); 有 NVIDIA GPU 可装成 --device cuda
-ExecStart=__REPO_DIR__/.venv/bin/python -m gateway --device __DEVICE__ --port 8000 --preload fun-asr-mlt-nano sensevoice
+ExecStart=__REPO_DIR__/.venv/bin/python -m gateway --device __DEVICE__ --port 8000 --preload fun-asr-mlt-nano
 Restart=on-failure
 RestartSec=5
 

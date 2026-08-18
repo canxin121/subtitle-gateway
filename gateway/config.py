@@ -19,6 +19,8 @@ class RuntimeConfig:
     port: int = 8000
     device: str = "auto"  # "auto" | "cpu" | "mps" | "cuda"; auto = first available
     preload: list = field(default_factory=list)
+    max_loaded_models: int = 1
+    mps_empty_cache: bool = True
     cache_dir: Path = field(default_factory=lambda: default_cache_dir())
     # ferrum protocol
     auth_secret: str = ""
@@ -130,8 +132,26 @@ def parse_args(argv: list[str] | None = None) -> RuntimeConfig:
     parser.add_argument(
         "--preload",
         nargs="*",
-        default=["fun-asr-mlt-nano", "sensevoice"],
+        default=["fun-asr-mlt-nano"],
         help="Startup pre-load model(s), e.g. --preload fun-asr-mlt-nano sensevoice",
+    )
+    parser.add_argument(
+        "--max-loaded-models",
+        type=int,
+        default=1,
+        help=(
+            "Maximum number of ASR models kept resident at once (default: 1). "
+            "Use 0 for unlimited or 2 to keep both bundled models loaded"
+        ),
+    )
+    parser.add_argument(
+        "--mps-empty-cache",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help=(
+            "Release unused PyTorch MPS allocator memory after each transcription "
+            "(default: enabled; use --no-mps-empty-cache to favor repeated-request throughput)"
+        ),
     )
     parser.add_argument(
         "--cache-dir",
@@ -184,12 +204,16 @@ def parse_args(argv: list[str] | None = None) -> RuntimeConfig:
         help="Free translation sources when no --translate-upstream/--libretranslate-upstream is set (applies to both endpoints). Comma-separated, tried in order: google (deep-translator), edge (Microsoft Edge endpoint), alibaba (translate.alibaba.com via translators; explicit source_lang only, no auto-detect); e.g. 'google,edge' or 'alibaba,google,edge' or 'none'",
     )
     args = parser.parse_args(argv)
+    if args.max_loaded_models < 0:
+        parser.error("--max-loaded-models must be >= 0")
 
     return RuntimeConfig(
         host=args.host,
         port=args.port,
         device=args.device,
         preload=args.preload,
+        max_loaded_models=args.max_loaded_models,
+        mps_empty_cache=args.mps_empty_cache,
         cache_dir=resolve_cache_dir(args.cache_dir),
         auth_secret=args.auth_secret,
         encryption_key=args.encryption_key,

@@ -29,7 +29,6 @@
         <string>__PORT__</string>
         <string>--preload</string>
         <string>fun-asr-mlt-nano</string>
-        <string>sensevoice</string>
         <!-- __CACHE_ARG__ -->
     </array>
     <key>WorkingDirectory</key>

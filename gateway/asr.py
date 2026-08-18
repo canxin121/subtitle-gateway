@@ -5,19 +5,24 @@ Opus decoding (ctypes binding to libopus), WAV validation, and the ferrum
 response helpers.
 """
 
+import copy
 import ctypes
 import ctypes.util
+import gc
 import logging
 import os
 import re
 import struct
+import threading
 import time
+from collections import OrderedDict
 
 from .config import get_cfg
 
 logger = logging.getLogger(__name__)
 
-MODEL_REGISTRY = {}
+MODEL_REGISTRY = OrderedDict()
+_MODEL_LOCK = threading.RLock()
 _OPUS_DECODER = None
 
 MODEL_CONFIGS = {
@@ -33,6 +38,10 @@ MODEL_CONFIGS = {
         "model": "FunAudioLLM/Fun-ASR-MLT-Nano-2512",
         "hub": "hf",
         "trust_remote_code": True,
+        # FunASRNano stores BF16 under llm_conf, while its inference path reads
+        # a flat runtime key. Keep the override device-specific because full
+        # BF16 was only verified for the LLM on macOS MPS.
+        "llm_dtype_by_device": {"mps": "bf16"},
         "vad_model": "fsmn-vad",
         "vad_kwargs": {"max_single_segment_time": 30000},
         "languages": ["zh", "en", "ja", "ko", "yue", "auto"],
@@ -40,33 +49,112 @@ MODEL_CONFIGS = {
 }
 
 
+def _runtime_llm_dtype(model_name: str) -> str | None:
+    """Return the verified LLM dtype override for the active device."""
+    mapping = MODEL_CONFIGS[model_name].get("llm_dtype_by_device", {})
+    device_type = str(get_cfg().device).split(":", 1)[0]
+    return mapping.get(device_type)
+
+
+def _release_mps_cache(*, force: bool = False) -> None:
+    """Return currently unused PyTorch MPS allocator blocks to macOS."""
+    cfg = get_cfg()
+    if not str(cfg.device).startswith("mps"):
+        return
+    if not force and not cfg.mps_empty_cache:
+        return
+
+    try:
+        import torch
+
+        if torch.backends.mps.is_available():
+            # generate() is synchronous here, but synchronization also makes
+            # cleanup reliable after an inference exception.
+            torch.mps.synchronize()
+            torch.mps.empty_cache()
+    except Exception as exc:  # cleanup must never turn a valid response into 500
+        logger.debug("Unable to release MPS cache: %s", exc)
+
+
+def accelerator_memory_stats() -> dict:
+    """Return lightweight accelerator counters for the health endpoint."""
+    if not str(get_cfg().device).startswith("mps"):
+        return {}
+
+    try:
+        import torch
+
+        mib = 1024 * 1024
+        current = torch.mps.current_allocated_memory()
+        driver = torch.mps.driver_allocated_memory()
+        return {
+            "backend": "mps",
+            "current_allocated_mib": round(current / mib, 1),
+            "driver_allocated_mib": round(driver / mib, 1),
+            "driver_overhead_mib": round(max(driver - current, 0) / mib, 1),
+            "recommended_max_mib": round(torch.mps.recommended_max_memory() / mib, 1),
+        }
+    except Exception as exc:
+        logger.debug("Unable to read MPS memory counters: %s", exc)
+        return {"backend": "mps"}
+
+
+def _make_room_for_model() -> None:
+    """Evict least-recently-used models before loading a new one."""
+    limit = get_cfg().max_loaded_models
+    if limit <= 0:
+        return
+
+    evicted = []
+    while len(MODEL_REGISTRY) >= limit:
+        name, model = MODEL_REGISTRY.popitem(last=False)
+        evicted.append(name)
+        del model
+
+    if evicted:
+        gc.collect()
+        # Model eviction is explicitly intended to reclaim memory, regardless
+        # of the normal per-request cache policy.
+        _release_mps_cache(force=True)
+        logger.info("Evicted resident model(s): %s", evicted)
+
+
 def load_model(model_name: str):
-    """Lazily load a model and cache it in the registry (no-op if loaded)."""
-    if model_name in MODEL_REGISTRY:
-        return MODEL_REGISTRY[model_name]
+    """Lazily load a model and keep it in the configured LRU registry."""
+    with _MODEL_LOCK:
+        if model_name in MODEL_REGISTRY:
+            MODEL_REGISTRY.move_to_end(model_name)
+            return MODEL_REGISTRY[model_name]
 
-    if model_name not in MODEL_CONFIGS:
-        available = list(MODEL_CONFIGS.keys())
-        raise ValueError(f"Unknown model '{model_name}'. Available: {available}")
+        if model_name not in MODEL_CONFIGS:
+            available = list(MODEL_CONFIGS.keys())
+            raise ValueError(f"Unknown model '{model_name}'. Available: {available}")
 
-    from funasr import AutoModel
+        from funasr import AutoModel
 
-    cfg = MODEL_CONFIGS[model_name].copy()
-    # Strip metadata keys that are not AutoModel kwargs (exposed via
-    # /v1/models) before splatting into the constructor.
-    for meta in ("languages",):
-        cfg.pop(meta, None)
-    cfg["device"] = get_cfg().device
-    cfg["disable_update"] = True
+        cfg = copy.deepcopy(MODEL_CONFIGS[model_name])
+        # Strip gateway-only metadata before splatting into AutoModel.
+        for meta in ("languages", "llm_dtype_by_device"):
+            cfg.pop(meta, None)
+        cfg["device"] = get_cfg().device
+        cfg["disable_update"] = True
+        llm_dtype = _runtime_llm_dtype(model_name)
+        if llm_dtype:
+            cfg["llm_dtype"] = llm_dtype
 
-    logger.info(f"Loading model '{model_name}' on {cfg['device']}...")
-    t0 = time.time()
-    model = AutoModel(**cfg)
-    elapsed = time.time() - t0
-    logger.info(f"Model '{model_name}' loaded in {elapsed:.1f}s")
+        # With a one-model limit, unloading first prevents a model switch from
+        # temporarily requiring memory for both models at once.
+        _make_room_for_model()
 
-    MODEL_REGISTRY[model_name] = model
-    return model
+        logger.info(f"Loading model '{model_name}' on {cfg['device']}...")
+        t0 = time.time()
+        model = AutoModel(**cfg)
+        elapsed = time.time() - t0
+        logger.info(f"Model '{model_name}' loaded in {elapsed:.1f}s")
+
+        MODEL_REGISTRY[model_name] = model
+        MODEL_REGISTRY.move_to_end(model_name)
+        return model
 
 
 def clean_text(text: str) -> str:
@@ -81,31 +169,52 @@ def run_transcription(
     sentence_timestamp: bool,
 ):
     """Run one FunASR transcription. Returns (text, segments, elapsed_seconds)."""
-    asr_model = load_model(model_name)
-    t0 = time.time()
+    # Serial inference bounds peak accelerator memory even if the server is
+    # later moved to threaded handlers. The current async routes are already
+    # effectively serial because FunASR inference is synchronous.
+    with _MODEL_LOCK:
+        asr_model = load_model(model_name)
+        t0 = time.time()
 
-    generate_kwargs = {"input": audio_path, "batch_size": 1}
-    if language:
-        generate_kwargs["language"] = language
-    if sentence_timestamp:
-        generate_kwargs["sentence_timestamp"] = True
+        generate_kwargs = {"input": audio_path, "batch_size": 1}
+        if language:
+            generate_kwargs["language"] = language
+        if sentence_timestamp:
+            generate_kwargs["sentence_timestamp"] = True
+        llm_dtype = _runtime_llm_dtype(model_name)
+        if llm_dtype:
+            # FunASR resets request kwargs to a base snapshot on every call;
+            # keep this explicit so the decoder can never fall back to FP32.
+            generate_kwargs["llm_dtype"] = llm_dtype
 
-    result = asr_model.generate(**generate_kwargs)
-    elapsed = time.time() - t0
+        result = None
+        try:
+            import torch
 
-    text = clean_text(result[0]["text"])
-    segments = []
-    if "sentence_info" in result[0]:
-        for seg in result[0]["sentence_info"]:
-            segments.append(
-                {
-                    "start": seg.get("start", 0) / 1000.0,
-                    "end": seg.get("end", 0) / 1000.0,
-                    "text": clean_text(seg.get("text", "")),
-                    "speaker": seg.get("spk", None),
-                }
-            )
-    return text, segments, elapsed
+            # AutoModel uses no_grad internally; inference_mode also disables
+            # view/version bookkeeping for this inference-only service.
+            with torch.inference_mode():
+                result = asr_model.generate(**generate_kwargs)
+            elapsed = time.time() - t0
+
+            text = clean_text(result[0]["text"])
+            segments = []
+            if "sentence_info" in result[0]:
+                for seg in result[0]["sentence_info"]:
+                    segments.append(
+                        {
+                            "start": seg.get("start", 0) / 1000.0,
+                            "end": seg.get("end", 0) / 1000.0,
+                            "text": clean_text(seg.get("text", "")),
+                            "speaker": seg.get("spk", None),
+                        }
+                    )
+            return text, segments, elapsed
+        finally:
+            # Some FunASR result variants carry accelerator tensors. Drop the
+            # raw result before releasing unoccupied allocator blocks.
+            result = None
+            _release_mps_cache()
 
 
 def _fmt_ts(ms: int) -> str:

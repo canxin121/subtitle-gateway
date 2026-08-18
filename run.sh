@@ -18,10 +18,10 @@ while [[ $# -gt 0 ]]; do
 done
 
 echo "==> subtitle-gateway (device=$DEVICE port=$PORT)"
-echo "==> 模型: fun-asr-mlt-nano, sensevoice"
+echo "==> 预载模型: fun-asr-mlt-nano (按需切换; 默认最多常驻 1 个)"
 
 exec .venv/bin/python -m gateway \
   --device "$DEVICE" \
   --port "$PORT" \
-  --preload fun-asr-mlt-nano sensevoice \
+  --preload fun-asr-mlt-nano \
   ${EXTRA[@]+"${EXTRA[@]}"}
