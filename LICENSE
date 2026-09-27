@@ -19,11 +19,3 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
-
----
-
-This project is derived from serve_dual.py in the FunASR repository
-(https://github.com/modelscope/FunASR), which is distributed under the MIT
-license. The ASR model weights (SenseVoiceSmall, Fun-ASR-MLT-Nano, fsmn-vad)
-are subject to their own respective licenses and are NOT covered by this
-license — they are downloaded from ModelScope / Hugging Face at runtime.

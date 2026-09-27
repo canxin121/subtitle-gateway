@@ -1,7 +1,7 @@
-"""Translation gateway logic (DeepL-compatible + LibreTranslate), ported from
-serve_dual.py. Each function decouples the endpoint body (auth / parse /
-forward / error mapping / metric headers) from the HTTP envelope so it can be
-unit-tested offline. Returns (status_code, json_body, extra_headers).
+"""Translation gateway logic (DeepL-compatible + LibreTranslate). Each function
+decouples the endpoint body (auth / parse / forward / error mapping / metric
+headers) from the HTTP envelope so it can be unit-tested offline. Returns
+(status_code, json_body, extra_headers).
 
 When no upstream is configured, the endpoints fall back to a list of free
 translation sources (--translate-free, default "google,edge") tried in order —

@@ -1,7 +1,7 @@
 """Runtime configuration: CLI parsing, cache-dir resolution, env injection.
 
-Replaces the module-level `global` state of the original serve_dual.py with a
-single immutable `RuntimeConfig` dataclass read at request time via `get_cfg()`.
+A single immutable `RuntimeConfig` dataclass holds all runtime state, read at
+request time via `get_cfg()` — handlers never depend on module-level globals.
 """
 
 import argparse

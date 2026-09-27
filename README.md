@@ -1,6 +1,6 @@
 # subtitle-gateway
 
-统一的 **ASR + 翻译网关**(从 FunASR 仓库的 `serve_dual.py` 独立出来):
+统一的 **ASR + 翻译网关**:
 - **ASR**:FunASR 双模型(SenseVoiceSmall + Fun-ASR-MLT-Nano)
   - OpenAI 兼容 `POST /v1/audio/transcriptions`(multipart)
   - ferrum 协议 `POST /transcribe`(raw body + Opus/AES-GCM/鉴权,供 [mpv-stt-plugin](https://github.com/canxin121/mpv_stt_plugin_crates) 使用)
@@ -20,8 +20,8 @@ FUNASR_PATH=/path/to/FunASR ./setup.sh
 # 2. 一键启动 (device 默认 auto: 有 MPS 用 MPS, 否则 CPU; 端口 8000, 预载 Nano)
 ./run.sh
 
-# 或指定端口/设备/复用旧模型缓存 (--cpu 等价 --device cpu)
-./run.sh --port 9000 --cpu --cache-dir /path/to/old/models_cache
+# 或指定端口/设备/模型缓存目录 (--cpu 等价 --device cpu)
+./run.sh --port 9000 --cpu --cache-dir /path/to/models_cache
 ./run.sh --device cuda   # 有 NVIDIA GPU 的服务器
 ```
 
@@ -43,7 +43,7 @@ FUNASR_PATH=/path/to/FunASR ./setup.sh
 | `--host` / `--port` | `0.0.0.0` / `8000` | 监听地址 |
 | `--device` | `auto` | `auto`(首个可用 mps/cuda/cpu)\| `cpu` \| `mps` \| `cuda`;显式设备不可用时**自动回退 `cpu`**,纯 CPU 服务器开箱即用 |
 | `--preload` | `fun-asr-mlt-nano` | 启动预载模型(裸 `--preload` = 不加载) |
-| `--max-loaded-models` | `1` | 最多常驻 ASR 模型数;切换时按 LRU 释放旧模型;`0` 表示不限,`2` 可让两个模型同时常驻 |
+| `--max-loaded-models` | `1` | 最多常驻 ASR 模型数;切换时按 LRU 释放不再使用的模型;`0` 表示不限,`2` 可让两个模型同时常驻 |
 | `--mps-empty-cache` / `--no-mps-empty-cache` | 开启 | MPS 每次转写后释放空闲 allocator cache;关闭可偏向连续请求吞吐,但长音频后内存会保持在高水位 |
 | `--cache-dir` | 仓库根 `models_cache/` | 模型缓存目录(设 MODELSCOPE_CACHE + HF_HOME) |
 | `--auth-secret` | `""` | ferrum 鉴权(客户端发 `x-auth-token = sha256(secret)`) |
@@ -109,16 +109,18 @@ alibaba→`zh`/`zh-tw`)。`alibaba` 无自动检测:客户端带 `source_lang`/`
 
 ## 模型缓存
 
-默认缓存目录 = 仓库根 `models_cache/`(相对路径,不硬编码)。三个途径覆盖:
+### 缓存目录选择
+
+默认缓存目录 = 仓库根 `models_cache/`。三个途径覆盖:
 1. `--cache-dir <dir>` CLI 参数(优先级最高)
 2. `SUBTITLE_GATEWAY_CACHE_DIR` 环境变量
 3. 仓库根默认
 
-**从旧 serve_dual 迁移**:旧缓存(7G)直接复用,无需重新下载——
+如需把缓存放在别处(例如大容量盘),直接指定即可:
 ```bash
-ln -s /path/to/old/models_cache models_cache
+ln -s /path/to/models_cache models_cache
 # 或每次启动带参数:
-./run.sh --cache-dir /path/to/old/models_cache
+./run.sh --cache-dir /path/to/models_cache
 ```
 
 ## 服务安装
@@ -175,4 +177,4 @@ sudo ./install-systemd.sh --cache-dir /path/to/models_cache
 
 ## 许可
 
-MIT(派生自 FunASR 的 serve_dual.py)。ASR 模型权重各自许可,运行时从 ModelScope / Hugging Face 下载,不在本仓库内。
+MIT。ASR 模型权重各自许可,运行时从 ModelScope / Hugging Face 下载,不在本仓库内。

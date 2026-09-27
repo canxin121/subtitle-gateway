@@ -1,7 +1,8 @@
-"""FastAPI application + routes + entry point (ported from serve_dual.py).
+"""FastAPI application + routes + entry point.
 
-Endpoint paths / methods / bodies / status codes / x-metric-* headers are kept
-byte-for-byte; only the app title and the config plumbing changed.
+Wire contract is fixed: endpoint paths / methods / bodies / status codes and
+the x-metric-* response headers are what the clients (mpv-stt-plugin's ferrum
+backend, OpenAI-compatible tools, DeepL/LibreTranslate clients) depend on.
 """
 
 import logging

@@ -1,4 +1,4 @@
-"""ASR models + transcription pipeline, ported verbatim from serve_dual.py.
+"""ASR models + transcription pipeline.
 
 Covers: model registry / lazy loading, FunASR transcription, SRT rendering,
 Opus decoding (ctypes binding to libopus), WAV validation, and the ferrum
@@ -307,7 +307,7 @@ class OpusDecoder:
 
 
 def get_opus_decoder() -> OpusDecoder:
-    """Lazily build the shared OpusDecoder (mirrors the old module-level global)."""
+    """Lazily build the shared OpusDecoder (one libopus handle per process)."""
     global _OPUS_DECODER
     if _OPUS_DECODER is None:
         _OPUS_DECODER = OpusDecoder()

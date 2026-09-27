@@ -36,10 +36,9 @@ else
   "${PIP[@]}" funasr
 fi
 
-# 4) torch / torchaudio: FunASR 的 setup.py 未声明它们(旧环境也是显式安装的),
-#    但 ASR 运行必需, 这里显式装 (版本与旧 local_jp_test venv 实测一致)
+# 4) torch / torchaudio: FunASR 的 setup.py 未声明它们,
+#    但 ASR 运行必需, 这里显式装
 echo "==> installing torch/torchaudio (ASR 必需, funasr 未声明)"
 "${PIP[@]}" "torch==2.13.0" "torchaudio==2.11.0"
 
 echo "==> done. 启动: ./run.sh"
-echo "==> 迁移复用旧模型缓存: ./run.sh --cache-dir <旧models_cache路径>"
