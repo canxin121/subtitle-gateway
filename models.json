@@ -1,0 +1,23 @@
+{
+  "_comment": "Single source of truth for the ASR model set. Read by gateway.manifest at startup (/v1/models, --preload default) and by scripts/download-models.py (one-key download).",
+  "preload": ["fun-asr-mlt-nano"],
+  "models": {
+    "sensevoice": {
+      "model": "iic/SenseVoiceSmall",
+      "vad_model": "fsmn-vad",
+      "vad_kwargs": { "max_single_segment_time": 30000 },
+      "languages": ["zh", "en", "ja", "ko", "yue", "auto"],
+      "note": "非自回归, 最快 (CPU 约 30x 实时); 边缘样本 (绕口令/古语) 易错"
+    },
+    "fun-asr-mlt-nano": {
+      "model": "FunAudioLLM/Fun-ASR-MLT-Nano-2512",
+      "hub": "hf",
+      "trust_remote_code": true,
+      "llm_dtype_by_device": { "mps": "bf16" },
+      "vad_model": "fsmn-vad",
+      "vad_kwargs": { "max_single_segment_time": 30000 },
+      "languages": ["zh", "en", "ja", "ko", "yue", "auto"],
+      "note": "31 语言, 质量最好 (含标点/数字规范化); LLM 解码, CPU 约 3-6x 实时"
+    }
+  }
+}

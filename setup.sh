@@ -10,6 +10,11 @@ PY_VERSION="${PYTHON_VERSION:-3.12}"
 VENV=".venv"
 UV="$(command -v uv || true)"
 
+# PyPI 直连在部分网络下极慢 (torch 单个包 ~2GB)。用官方源: PIP_INDEX_URL= ./setup.sh
+PIP_INDEX_URL="${PIP_INDEX_URL-https://mirrors.aliyun.com/pypi/simple/}"
+export PIP_INDEX_URL
+export UV_DEFAULT_INDEX="${UV_DEFAULT_INDEX:-$PIP_INDEX_URL}"
+
 echo "==> subtitle-gateway setup"
 
 # 1) 建 venv: uv 优先, 无 uv fallback 到 python3 -m venv
@@ -22,6 +27,8 @@ else
   python3 -m venv "$VENV"
   PIP=("$VENV/bin/python" "-m" "pip")
 fi
+
+echo "==> index: $PIP_INDEX_URL"
 
 # 2) 服务器小依赖
 echo "==> installing server dependencies from requirements.txt"
@@ -37,8 +44,19 @@ else
 fi
 
 # 4) torch / torchaudio: FunASR 的 setup.py 未声明它们,
-#    但 ASR 运行必需, 这里显式装
+#    但 ASR 运行必需; 放最后装, 让这个 pin 覆盖 funasr 拉进来的版本
 echo "==> installing torch/torchaudio (ASR 必需, funasr 未声明)"
 "${PIP[@]}" "torch==2.13.0" "torchaudio==2.11.0"
 
+# 5) 预下载模型 (清单 = 仓库根 models.json)。ASR 必需; 装完即用, 无网络时跳过。
+if [ "${SKIP_MODEL_DOWNLOAD:-}" = "1" ]; then
+  echo "==> SKIP_MODEL_DOWNLOAD=1, 跳过模型下载 (之后可跑: scripts/run-download.sh)"
+else
+  echo "==> downloading ASR models (models.json; 首次 ~7G, 复用已有缓存)"
+  if ! "$VENV/bin/python" scripts/download-models.py; then
+    echo "==> WARN: 模型下载失败(网络?), 安装继续。稍后可重试: scripts/run-download.sh" >&2
+  fi
+fi
+
 echo "==> done. 启动: ./run.sh"
+echo "==> 本地测速/质量: scripts/gen-bench-audio.py && scripts/run-bench.sh"

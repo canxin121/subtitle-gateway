@@ -18,35 +18,13 @@ import time
 from collections import OrderedDict
 
 from .config import get_cfg
+from .manifest import GATEWAY_META_KEYS, MODEL_CONFIGS
 
 logger = logging.getLogger(__name__)
 
 MODEL_REGISTRY = OrderedDict()
 _MODEL_LOCK = threading.RLock()
 _OPUS_DECODER = None
-
-MODEL_CONFIGS = {
-    "sensevoice": {
-        "model": "iic/SenseVoiceSmall",
-        "vad_model": "fsmn-vad",
-        "vad_kwargs": {"max_single_segment_time": 30000},
-        # Advisory: which language codes the model accepts as a hint (zh/en/ja/
-        # ko/yue...). Not enforced — unknown values fall back to auto-detect.
-        "languages": ["zh", "en", "ja", "ko", "yue", "auto"],
-    },
-    "fun-asr-mlt-nano": {
-        "model": "FunAudioLLM/Fun-ASR-MLT-Nano-2512",
-        "hub": "hf",
-        "trust_remote_code": True,
-        # FunASRNano stores BF16 under llm_conf, while its inference path reads
-        # a flat runtime key. Keep the override device-specific because full
-        # BF16 was only verified for the LLM on macOS MPS.
-        "llm_dtype_by_device": {"mps": "bf16"},
-        "vad_model": "fsmn-vad",
-        "vad_kwargs": {"max_single_segment_time": 30000},
-        "languages": ["zh", "en", "ja", "ko", "yue", "auto"],
-    },
-}
 
 
 def _runtime_llm_dtype(model_name: str) -> str | None:
@@ -134,7 +112,7 @@ def load_model(model_name: str):
 
         cfg = copy.deepcopy(MODEL_CONFIGS[model_name])
         # Strip gateway-only metadata before splatting into AutoModel.
-        for meta in ("languages", "llm_dtype_by_device"):
+        for meta in GATEWAY_META_KEYS:
             cfg.pop(meta, None)
         cfg["device"] = get_cfg().device
         cfg["disable_update"] = True

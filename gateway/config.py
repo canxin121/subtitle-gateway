@@ -10,6 +10,8 @@ import os
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from .manifest import DEFAULT_PRELOAD
+
 logger = logging.getLogger(__name__)
 
 
@@ -132,8 +134,12 @@ def parse_args(argv: list[str] | None = None) -> RuntimeConfig:
     parser.add_argument(
         "--preload",
         nargs="*",
-        default=["fun-asr-mlt-nano"],
-        help="Startup pre-load model(s), e.g. --preload fun-asr-mlt-nano sensevoice",
+        default=list(DEFAULT_PRELOAD),
+        help=(
+            "Startup pre-load model(s); default comes from the `preload` key in "
+            f"models.json ({' '.join(DEFAULT_PRELOAD) or 'none'}). "
+            "e.g. --preload fun-asr-mlt-nano sensevoice, or bare --preload to load nothing"
+        ),
     )
     parser.add_argument(
         "--max-loaded-models",

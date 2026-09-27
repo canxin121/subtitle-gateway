@@ -1,6 +1,7 @@
 .venv/
 models_cache
 logs/
+bench/
 __pycache__/
 *.pyc
 .pytest_cache/

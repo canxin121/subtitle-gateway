@@ -18,10 +18,9 @@ while [[ $# -gt 0 ]]; do
 done
 
 echo "==> subtitle-gateway (device=$DEVICE port=$PORT)"
-echo "==> 预载模型: fun-asr-mlt-nano (按需切换; 默认最多常驻 1 个)"
+echo "==> 预载模型: 默认取自 models.json 的 preload; 传 --preload <id...> 覆盖"
 
 exec .venv/bin/python -m gateway \
   --device "$DEVICE" \
   --port "$PORT" \
-  --preload fun-asr-mlt-nano \
   ${EXTRA[@]+"${EXTRA[@]}"}

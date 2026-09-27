@@ -27,8 +27,7 @@
         <string>__DEVICE__</string>
         <string>--port</string>
         <string>__PORT__</string>
-        <string>--preload</string>
-        <string>fun-asr-mlt-nano</string>
+        <!-- 预载模型取自 models.json 的 preload; 需要覆盖就加 --preload <id...> -->
         <!-- __CACHE_ARG__ -->
     </array>
     <key>WorkingDirectory</key>

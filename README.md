@@ -11,7 +11,7 @@
 ## 快速开始
 
 ```bash
-# 1. 一键装环境 (funasr 从 PyPI 装)
+# 1. 一键装环境 + 一键下载模型 (模型清单 = 仓库根 models.json)
 ./setup.sh
 
 # 想要精确复现本地 FunASR 开发版行为, 用 editable:
@@ -24,6 +24,57 @@ FUNASR_PATH=/path/to/FunASR ./setup.sh
 ./run.sh --port 9000 --cpu --cache-dir /path/to/models_cache
 ./run.sh --device cuda   # 有 NVIDIA GPU 的服务器
 ```
+
+## 模型
+
+模型清单是仓库根 [`models.json`](models.json), 网关和脚本共用同一份:
+
+| id | 模型 | 参数 | 语言 | 特点 |
+|---|---|---|---|---|
+| `fun-asr-mlt-nano` | Fun-ASR-MLT-Nano-2512 | 800M | 31 种 | 质量最好: 自带标点/数字规范化, 边缘样本(绕口令/古语/术语)明显更准; LLM 解码, CPU 上约 3-6x 实时 |
+| `sensevoice` | SenseVoiceSmall | 234M | 中/粤/英/日/韩 | 最快: 非自回归, CPU 上约 30x 实时; 日常/专业文本够用, 绕口令类易错 |
+
+`models.json` 里还有 `preload` 字段 = 启动默认预载的模型。加模型/改默认只动这一个文件,
+`/v1/models`、`--preload` 默认值、下载脚本的清单都会跟着变。
+
+### 一键下载
+
+```bash
+scripts/run-download.sh                     # 下载 models.json 里的全部模型 (幂等, 复用已有缓存)
+scripts/run-download.sh --list              # 只列将要下载的模型 id
+scripts/run-download.sh --model sensevoice  # 只下指定模型 (可重复)
+scripts/run-download.sh --cache-dir /data/models_cache
+```
+
+`./setup.sh` 末尾会自动调用它; 想跳过用 `SKIP_MODEL_DOWNLOAD=1 ./setup.sh`。
+
+### 本地 bench (速度 + 质量)
+
+```bash
+# 1. 生成合成日语语料 (macOS 内置 say/afconvert, 无需额外依赖; 含绕口令/俳句/术语等硬样本)
+scripts/gen-bench-audio.py                  # -> bench/audio/
+scripts/gen-bench-audio.py --lang zh --dir bench/audio-zh
+
+# 2. 跑 bench: 各模型 RTF + 输出文本对比表
+scripts/run-bench.sh                        # device 默认 auto, 每个文件跑 3 次取中位
+scripts/run-bench.sh --device cpu           # 纯 CPU 服务器
+scripts/run-bench.sh --model all --repeat 5
+scripts/run-bench.sh --audio /path/to/real_audio   # 换成真实音频目录
+
+# 3. 结果
+bench/RESULTS.md      # 对比表 + 每个模型的原始输出文本 (方便肉眼比对错字)
+bench/results.json    # 原始数字, 便于跨版本/跨机器追踪
+```
+
+- bench 走的是网关**自身**的加载/推理路径 (`gateway.asr`), 所以数字就是线上行为,
+  不是另一套 demo 脚本。
+- `RTF = 中位耗时 / 音频时长`: 越小越快, < 1 即快于实时。VAD 切分是逐句进行的,
+  长音频的 RTF 更能反映稳态吞吐。
+- 语料目录放一个 `models.json` 就能标注每个文件:
+  `{"labels": {"a.wav": "标签"}, "reference": {"a.wav": "参考文本"}}` —— 带 `reference`
+  时表里会多一列 **CER**(字符错误率, 已剔除标点/空格, 因为各模型是否输出「。」本来就不一致)。
+- 表里的 `load (s)` 是一次性开销, 不计入 RTF。
+- 语料和结果都在 `bench/`(已 gitignore), 不入库。
 
 ## 端点
 
@@ -42,7 +93,7 @@ FUNASR_PATH=/path/to/FunASR ./setup.sh
 |---|---|---|
 | `--host` / `--port` | `0.0.0.0` / `8000` | 监听地址 |
 | `--device` | `auto` | `auto`(首个可用 mps/cuda/cpu)\| `cpu` \| `mps` \| `cuda`;显式设备不可用时**自动回退 `cpu`**,纯 CPU 服务器开箱即用 |
-| `--preload` | `fun-asr-mlt-nano` | 启动预载模型(裸 `--preload` = 不加载) |
+| `--preload` | `models.json` 的 `preload`(默认 `fun-asr-mlt-nano`) | 启动预载模型(裸 `--preload` = 不加载) |
 | `--max-loaded-models` | `1` | 最多常驻 ASR 模型数;切换时按 LRU 释放不再使用的模型;`0` 表示不限,`2` 可让两个模型同时常驻 |
 | `--mps-empty-cache` / `--no-mps-empty-cache` | 开启 | MPS 每次转写后释放空闲 allocator cache;关闭可偏向连续请求吞吐,但长音频后内存会保持在高水位 |
 | `--cache-dir` | 仓库根 `models_cache/` | 模型缓存目录(设 MODELSCOPE_CACHE + HF_HOME) |
@@ -109,18 +160,18 @@ alibaba→`zh`/`zh-tw`)。`alibaba` 无自动检测:客户端带 `source_lang`/`
 
 ## 模型缓存
 
-### 缓存目录选择
+### 缓存目录
 
 默认缓存目录 = 仓库根 `models_cache/`。三个途径覆盖:
 1. `--cache-dir <dir>` CLI 参数(优先级最高)
 2. `SUBTITLE_GATEWAY_CACHE_DIR` 环境变量
 3. 仓库根默认
 
-如需把缓存放在别处(例如大容量盘),直接指定即可:
+下载脚本 (`scripts/run-download.sh`) 和 bench 用同一套优先级, 指哪下哪、指哪读哪:
+
 ```bash
-ln -s /path/to/models_cache models_cache
-# 或每次启动带参数:
-./run.sh --cache-dir /path/to/models_cache
+scripts/run-download.sh --cache-dir /data/models_cache
+SUBTITLE_GATEWAY_CACHE_DIR=/data/models_cache ./run.sh
 ```
 
 ## 服务安装
