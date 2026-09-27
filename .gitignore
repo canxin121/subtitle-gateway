@@ -1,7 +1,11 @@
 .venv/
 models_cache
 logs/
-bench/
+# bench audio corpora are committed (only ~3MB, and results are only
+# comparable across machines if everyone benches the same clips); results are
+# machine-specific, so they stay out.
+bench/**/RESULTS.md
+bench/**/results.json
 __pycache__/
 *.pyc
 .pytest_cache/

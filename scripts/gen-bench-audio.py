@@ -1,19 +1,28 @@
 #!/usr/bin/env python3
 """Generate benchmark TTS audio for the ASR bench (macOS only).
 
+The corpus is committed under bench/audio/{ja,zh}/, so benching needs nothing
+from this script — it is only how that corpus was produced and how to
+regenerate it (or add a language). Regenerating changes the clips, which makes
+results incomparable with earlier runs, so prefer adding over rewriting.
+
 Uses the built-in `say` voices and `afconvert`, so no extra dependency is
-needed and the corpus is mine for free. Voice quality is synthetic, but it is
-stable across machines — good enough for speed (RTF) and for a rough quality
-signal. Use --dir to point at a real-audio corpus instead when you have one:
-scripts/bench.py accepts any directory of WAVs.
+needed. Voice quality is synthetic, but it is captured in the repo and thus
+identical for everyone — good enough for speed (RTF) and for a rough quality
+signal. Use --audio to point scripts/bench.py at real audio when you have it.
 
 Usage:
-  scripts/gen-bench-audio.py                 # voices auto-detected
+  scripts/gen-bench-audio.py                 # ja -> bench/audio/ja
+  scripts/gen-bench-audio.py --lang zh       # zh -> bench/audio/zh
   scripts/gen-bench-audio.py --voice Kyoko   # force a Ja-JP voice
-  scripts/gen-bench-audio.py --force         # regenerate existing files
+  scripts/gen-bench-audio.py --dir /tmp/x    # somewhere else
 """
 
+# Stdlib-only, so it runs on the system python3 (older than the venv's) too.
+from __future__ import annotations
+
 import argparse
+import json
 import shutil
 import subprocess
 import sys
@@ -149,13 +158,18 @@ def synth(text: str, out: Path, voice: str, rate: int) -> None:
 
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__)
-    ap.add_argument(
-        "--dir",
-        default=str(BENCH_DIR),
-        help=f"output directory (default: {BENCH_DIR})",
-    )
     ap.add_argument("--voice", default=None, help="force a `say` voice for every clip")
     ap.add_argument("--lang", default="ja", choices=sorted(SETS), help="which set to synthesize")
+    ap.add_argument(
+        "--dir",
+        default="",
+        help=f"output directory (default: {BENCH_DIR}/<lang>)",
+    )
+    ap.add_argument(
+        "--models-json",
+        default="",
+        help="corpus metadata path (default: <output dir>/models.json)",
+    )
     ap.add_argument("--force", action="store_true", help="overwrite existing files")
     args = ap.parse_args()
 
@@ -163,7 +177,10 @@ def main() -> int:
         print("error: needs macOS `say` and `afconvert`", file=sys.stderr)
         return 1
 
-    out_dir = Path(args.dir)
+    # One corpus per language, each a self-contained directory that
+    # scripts/bench.py can be pointed at with --audio.
+    out_dir = Path(args.dir) if args.dir else BENCH_DIR / args.lang
+    models_json = Path(args.models_json) if args.models_json else out_dir / "models.json"
     voices = list_voices()
     voice = args.voice or find_voice(voices, args.lang)
     if not voice:
@@ -176,15 +193,38 @@ def main() -> int:
 
     print(f"output: {out_dir}")
     print(f"voice:  {voice} ({args.lang})")
+    labels: dict[str, str] = {}
+    references: dict[str, str] = {}
     for name, label, rate, text in SETS[args.lang]:
+        labels[name] = label
+        references[name] = text
         out = out_dir / name
         if out.exists() and not args.force:
-            print(f"  skip   {name} (exists)")
+            print(f"  skip   {name:16} {label} (exists)")
             continue
         synth(text, out, voice, rate)
         print(f"  write  {name:16} {label}  ({out.stat().st_size / 1024:.0f} KiB)")
 
-    print(f"done. bench: scripts/run-bench.sh --model all --audio {out_dir}")
+    # The reference text is exactly what was synthesized — recording it here is
+    # what lets bench.py report CER, and keeps the two from drifting.
+    models_json.parent.mkdir(parents=True, exist_ok=True)
+    models_json.write_text(
+        json.dumps(
+            {
+                "voice": f"{voice} ({args.lang})",
+                "generated_by": f"scripts/gen-bench-audio.py --lang {args.lang}",
+                "labels": labels,
+                "reference": references,
+            },
+            ensure_ascii=False,
+            indent=2,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    print(f"  write  {models_json.name} (labels + reference)")
+
+    print(f"done. bench: scripts/run-bench.sh --audio {out_dir}")
     return 0
 
 

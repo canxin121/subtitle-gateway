@@ -34,7 +34,7 @@ sys.path.insert(0, str(REPO))
 # A corpus ships a models.json next to the WAVs, binding files to clips and to
 # an optional reference transcript for CER/WER:
 #   {"labels": {"a.wav": "绕口令"}, "reference": {"a.wav": "…"}}
-BENCH_DIR = REPO / "bench"
+BENCH_DIR = REPO / "bench" / "audio"
 REFERENCE_FIELD = "reference"
 
 
@@ -246,7 +246,11 @@ def main() -> int:
         help=f"model id (repeatable) or 'all'; available: {', '.join(MODEL_CONFIGS)}",
     )
     ap.add_argument("--device", default="auto", help="auto|cpu|mps|cuda (default: auto)")
-    ap.add_argument("--audio", default=str(BENCH_DIR / "audio"), help="directory of WAVs")
+    ap.add_argument(
+        "--audio",
+        default=str(BENCH_DIR / "ja"),
+        help=f"directory of WAVs (default: {BENCH_DIR}/ja; zh corpus: {BENCH_DIR}/zh)",
+    )
     ap.add_argument("--models-file", default=None, help="JSON of {file: label} (default: <audio>/models.json)")
     ap.add_argument("--repeat", type=int, default=3, help="runs per file, take the median (default: 3)")
     ap.add_argument("--language", default=None, help="language hint passed to the model")
@@ -264,9 +268,26 @@ def main() -> int:
         default="",
         help="model cache dir; default: repo-root/models_cache (ignored if already set by the wrapper)",
     )
-    ap.add_argument("--out", default=str(REPO / "bench" / "RESULTS.md"), help="markdown output path")
-    ap.add_argument("--json-out", default=str(REPO / "bench" / "results.json"), help="raw results path")
+    ap.add_argument(
+        "--out",
+        default="",
+        help="markdown output path (default: <audio dir>/RESULTS.md)",
+    )
+    ap.add_argument(
+        "--json-out",
+        default="",
+        help="raw results path (default: <audio dir>/results.json)",
+    )
     args = ap.parse_args()
+
+    # Results land next to the corpus, so benching the shipped Japanese set and
+    # the Chinese set does not have one overwrite the other. Both are gitignored
+    # (the numbers are machine-specific).
+    audio_dir = Path(args.audio)
+    if not args.out:
+        args.out = str(audio_dir / "RESULTS.md")
+    if not args.json_out:
+        args.json_out = str(audio_dir / "results.json")
 
     from gateway.config import apply_cache_env, resolve_cache_dir
 

@@ -50,20 +50,18 @@ scripts/run-download.sh --cache-dir /data/models_cache
 
 ### 本地 bench (速度 + 质量)
 
-```bash
-# 1. 生成合成日语语料 (macOS 内置 say/afconvert, 无需额外依赖; 含绕口令/俳句/术语等硬样本)
-scripts/gen-bench-audio.py                  # -> bench/audio/
-scripts/gen-bench-audio.py --lang zh --dir bench/audio-zh
+语料已随仓库提供 (`bench/audio/ja`, `bench/audio/zh`), 开箱即跑:
 
-# 2. 跑 bench: 各模型 RTF + 输出文本对比表
-scripts/run-bench.sh                        # device 默认 auto, 每个文件跑 3 次取中位
+```bash
+scripts/run-bench.sh                        # 日语语料, device 默认 auto, 每个文件跑 3 次取中位
 scripts/run-bench.sh --device cpu           # 纯 CPU 服务器
 scripts/run-bench.sh --model all --repeat 5
+scripts/run-bench.sh --audio bench/audio/zh        # 中文语料
 scripts/run-bench.sh --audio /path/to/real_audio   # 换成真实音频目录
 
-# 3. 结果
-bench/RESULTS.md      # 对比表 + 每个模型的原始输出文本 (方便肉眼比对错字)
-bench/results.json    # 原始数字, 便于跨版本/跨机器追踪
+# 结果 (与语料同目录, 已 gitignore —— 数字是机器相关的)
+bench/audio/ja/RESULTS.md    # 对比表 + 每个模型的原始输出文本 (方便肉眼比对错字)
+bench/audio/ja/results.json  # 原始数字, 便于跨版本/跨机器追踪
 ```
 
 - bench 走的是网关**自身**的加载/推理路径 (`gateway.asr`), 所以数字就是线上行为,
@@ -74,7 +72,9 @@ bench/results.json    # 原始数字, 便于跨版本/跨机器追踪
   `{"labels": {"a.wav": "标签"}, "reference": {"a.wav": "参考文本"}}` —— 带 `reference`
   时表里会多一列 **CER**(字符错误率, 已剔除标点/空格, 因为各模型是否输出「。」本来就不一致)。
 - 表里的 `load (s)` 是一次性开销, 不计入 RTF。
-- 语料和结果都在 `bench/`(已 gitignore), 不入库。
+- 语料是 macOS `say` 合成的 (含绕口令/俳句/术语/快速语速等硬样本), 由
+  `scripts/gen-bench-audio.py` 生成后**入库**, 这样各人的 clips 完全一致、数字可比。
+  重新生成会改动 clips, 让历史结果失去可比性 —— 加语言可以, 尽量别重写已有的。
 
 ## 端点
 

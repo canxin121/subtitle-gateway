@@ -59,4 +59,4 @@ else
 fi
 
 echo "==> done. 启动: ./run.sh"
-echo "==> 本地测速/质量: scripts/gen-bench-audio.py && scripts/run-bench.sh"
+echo "==> 本地测速/质量: scripts/run-bench.sh (语料已入库, 无需生成)""

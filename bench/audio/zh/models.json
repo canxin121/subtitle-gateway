@@ -1,0 +1,12 @@
+{
+  "voice": "Tingting (zh)",
+  "generated_by": "scripts/gen-bench-audio.py --lang zh",
+  "labels": {
+    "short.wav": "短句",
+    "long.wav": "长句(天气预报)"
+  },
+  "reference": {
+    "short.wav": "你好，今天天气不错。",
+    "long.wav": "今天全国大部分地区受高气压控制，天气以晴为主。气温接近常年水平略偏高，白天感觉温暖。不过内陆地区早晚仍然偏凉，请注意增减衣物。午后山区附近可能出现阵雨或雷阵雨，请留意天气变化。"
+  }
+}
