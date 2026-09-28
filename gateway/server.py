@@ -1,7 +1,7 @@
 """FastAPI application + routes + entry point.
 
 Wire contract is fixed: endpoint paths / methods / bodies / status codes and
-the x-metric-* response headers are what the clients (mpv-stt-plugin's ferrum
+the x-metric-* response headers are what the clients (mpv_stt_plugin_rs's ferrum
 backend, OpenAI-compatible tools, DeepL/LibreTranslate clients) depend on.
 """
 
@@ -34,7 +34,10 @@ async def transcribe(
     model: str = Form(default="sensevoice"),
     language: str | None = Form(default=None),
     response_format: str | None = Form(default="json"),
-    sentence_timestamp: bool = Form(default=False),
+    timestamp_granularities: list[str] = Form(default=[]),
+    timestamp_granularities_bracketed: list[str] = Form(
+        default=[], alias="timestamp_granularities[]"
+    ),
 ):
     """OpenAI-compatible audio transcription endpoint.
 
@@ -42,8 +45,16 @@ async def transcribe(
     - model: fun-asr-mlt-nano | sensevoice
     - language: 可选语言提示（ja/zh/en...）
     - response_format: json | verbose_json
-    - sentence_timestamp: 为 true 时返回 sentence_info 分段（供字幕插件用）
+    - timestamp_granularities[]: OpenAI 标准的 "segment"/"word" 数组；给了
+      "segment" 才返回分段（字幕插件用）。服务端实际只产出句子级分段，所以
+      "word" 与 "segment" 等效 —— 与 OpenAI 的 `verbose_json` 一样在同一个
+      `segments` 字段里返回。
+
+    两种字段拼写都接受：OpenAI SDK/Groq 发的是带方括号的
+    `timestamp_granularities[]`，而 FastAPI 的表单解析只把不带括号的名字绑定到
+    `list[str]`，所以带括号的那份由 `_bracketed` 单独接住再合并。
     """
+    granularities = timestamp_granularities or timestamp_granularities_bracketed
     if model not in asr.MODEL_CONFIGS:
         return JSONResponse(
             {
@@ -61,7 +72,7 @@ async def transcribe(
 
     try:
         text, segments, elapsed = asr.run_transcription(
-            model, tmp_path, language, sentence_timestamp
+            model, tmp_path, language, granularities
         )
 
         if response_format == "verbose_json":
@@ -155,7 +166,7 @@ async def transcribe_ferrum(request: Request):
 
     try:
         text, segments, elapsed = asr.run_transcription(
-            model_name, tmp_path, language, sentence_timestamp=True
+            model_name, tmp_path, language, timestamp_granularities=["segment"]
         )
         if not segments and text:
             segments = [{"start": 0, "end": elapsed, "text": text}]

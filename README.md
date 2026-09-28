@@ -2,8 +2,8 @@
 
 统一的 **ASR + 翻译网关**:
 - **ASR**:FunASR 双模型(SenseVoiceSmall + Fun-ASR-MLT-Nano)
-  - OpenAI 兼容 `POST /v1/audio/transcriptions`(multipart)
-  - ferrum 协议 `POST /transcribe`(raw body + Opus/AES-GCM/鉴权,供 [mpv-stt-plugin](https://github.com/canxin121/mpv_stt_plugin_crates) 使用)
+  - OpenAI 兼容 `POST /v1/audio/transcriptions`(multipart,字段与 OpenAI 一致)
+  - ferrum 协议 `POST /transcribe`(raw body + Opus/AES-GCM/鉴权,供 [mpv_stt_plugin_rs](https://github.com/canxin121/mpv_stt_plugin_rs) 使用)
 - **翻译**:两个协议网关,转发到各自上游
   - DeepL 兼容 `POST /v1/translate`
   - LibreTranslate `POST /translate`
@@ -80,7 +80,7 @@ bench/audio/ja/results.json  # 原始数字, 便于跨版本/跨机器追踪
 
 | 端点 | 协议 | 说明 |
 |---|---|---|
-| `POST /v1/audio/transcriptions` | OpenAI | `-F file=@audio.wav -F model=sensevoice`(或 `fun-asr-mlt-nano`) |
+| `POST /v1/audio/transcriptions` | OpenAI | `-F file=@audio.wav -F model=sensevoice`(或 `fun-asr-mlt-nano`);要分段再加 `-F response_format=verbose_json -F timestamp_granularities[]=segment`(标准 OpenAI 字段;不带方括号的 `timestamp_granularities` 同样接受;不加只返回 `text`) |
 | `POST /transcribe` | ferrum | raw body,头 `x-model`/`x-language`(可选语言提示)/`x-compression`(pcm\|wav\|opus)/`x-encrypted`/`x-auth-token`;响应头回显 `x-model`/`x-language` |
 | `POST /v1/translate` | DeepL | header `Authorization: DeepL-Auth-Key {key}` |
 | `POST /translate` | LibreTranslate | body `api_key` 字段 |

@@ -144,9 +144,17 @@ def run_transcription(
     model_name: str,
     audio_path: str,
     language: str | None,
-    sentence_timestamp: bool,
+    timestamp_granularities: list[str] | None = None,
 ):
-    """Run one FunASR transcription. Returns (text, segments, elapsed_seconds)."""
+    """Run one FunASR transcription. Returns (text, segments, elapsed_seconds).
+
+    `timestamp_granularities` is the standard OpenAI field
+    (`timestamp_granularities[]`): an empty/absent list means the caller only
+    wants `text`. Asking for `segment` is what makes FunASR produce
+    `sentence_info`; `sentence_timestamp` below is FunASR's own `generate()`
+    kwarg for that, not an HTTP field.
+    """
+    want_segments = bool(timestamp_granularities)
     # Serial inference bounds peak accelerator memory even if the server is
     # later moved to threaded handlers. The current async routes are already
     # effectively serial because FunASR inference is synchronous.
@@ -157,7 +165,8 @@ def run_transcription(
         generate_kwargs = {"input": audio_path, "batch_size": 1}
         if language:
             generate_kwargs["language"] = language
-        if sentence_timestamp:
+        if want_segments:
+            # FunASR's own name for it — a FunASR kwarg, not an HTTP field.
             generate_kwargs["sentence_timestamp"] = True
         llm_dtype = _runtime_llm_dtype(model_name)
         if llm_dtype:

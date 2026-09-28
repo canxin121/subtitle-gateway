@@ -143,7 +143,7 @@ def bench_model(model_name: str, audio: list, args) -> dict:
         for _ in range(args.repeat):
             t0 = time.perf_counter()
             text, _segments, _elapsed = asr.run_transcription(
-                model_name, str(path), args.language, sentence_timestamp=True
+                model_name, str(path), args.language, timestamp_granularities=["segment"]
             )
             times.append(time.perf_counter() - t0)
         median = statistics.median(times)
