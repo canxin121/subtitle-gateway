@@ -18,6 +18,32 @@
       "vad_kwargs": { "max_single_segment_time": 30000 },
       "languages": ["zh", "en", "ja", "ko", "yue", "auto"],
       "note": "31 语言, 质量最好 (含标点/数字规范化); LLM 解码, CPU 约 3-6x 实时"
+    },
+    "qwen3-asr-1.7b": {
+      "model": "Qwen/Qwen3-ASR-1.7B",
+      "hub": "ms",
+      "dtype_by_device": { "mps": "bf16" },
+      "vad_model": "fsmn-vad",
+      "vad_kwargs": { "max_single_segment_time": 30000 },
+      "languages": [
+        "zh", "en", "yue", "ar", "de", "fr", "es", "pt", "id", "it", "ko",
+        "ru", "th", "vi", "ja", "tr", "hi", "ms", "nl", "sv", "da", "fi",
+        "pl", "cs", "fil", "fa", "el", "ro", "hu", "mk", "auto"
+      ],
+      "note": "52 语种 (30 语言 + 22 中文方言), 原生流式; 1.7B 官方称对标闭源商业 API; 需 qwen-asr 包 + transformers 4.57.6"
+    },
+    "qwen3-asr-0.6b": {
+      "model": "Qwen/Qwen3-ASR-0.6B",
+      "hub": "ms",
+      "dtype_by_device": { "mps": "bf16" },
+      "vad_model": "fsmn-vad",
+      "vad_kwargs": { "max_single_segment_time": 30000 },
+      "languages": [
+        "zh", "en", "yue", "ar", "de", "fr", "es", "pt", "id", "it", "ko",
+        "ru", "th", "vi", "ja", "tr", "hi", "ms", "nl", "sv", "da", "fi",
+        "pl", "cs", "fil", "fa", "el", "ro", "hu", "mk", "auto"
+      ],
+      "note": "同 52 语种, 速度/显存更均衡 (与 1.7B 同一架构, 仅参数量不同); 需 qwen-asr 包 + transformers 4.57.6"
     }
   }
 }

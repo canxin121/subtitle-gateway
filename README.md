@@ -1,7 +1,7 @@
 # subtitle-gateway
 
 统一的 **ASR + 翻译网关**:
-- **ASR**:FunASR 双模型(SenseVoiceSmall + Fun-ASR-MLT-Nano)
+- **ASR**:FunASR 四个模型(SenseVoiceSmall / Fun-ASR-MLT-Nano / Qwen3-ASR-1.7B / Qwen3-ASR-0.6B)
   - OpenAI 兼容 `POST /v1/audio/transcriptions`(multipart,字段与 OpenAI 一致)
   - ferrum 协议 `POST /transcribe`(raw body + Opus/AES-GCM/鉴权,供 [mpv_stt_plugin_rs](https://github.com/canxin121/mpv_stt_plugin_rs) 使用)
 - **翻译**:两个协议网关,转发到各自上游
@@ -33,9 +33,22 @@ FUNASR_PATH=/path/to/FunASR ./setup.sh
 |---|---|---|---|---|
 | `fun-asr-mlt-nano` | Fun-ASR-MLT-Nano-2512 | 800M | 31 种 | 质量最好: 自带标点/数字规范化, 边缘样本(绕口令/古语/术语)明显更准; LLM 解码, CPU 上约 3-6x 实时 |
 | `sensevoice` | SenseVoiceSmall | 234M | 中/粤/英/日/韩 | 最快: 非自回归, CPU 上约 30x 实时; 日常/专业文本够用, 绕口令类易错 |
+| `qwen3-asr-1.7b` | Qwen3-ASR-1.7B | 1.7B | 52 种(30 语言 + 22 中文方言) | 质量最强, 官方称对标闭源商业 API; 支持流式; **需要 `qwen-asr` 包**(见下) |
+| `qwen3-asr-0.6b` | Qwen3-ASR-0.6B | 0.6B | 同上 52 种 | 同一架构的轻量档: 速度/显存更均衡, 质量略逊于 1.7B; 同样需要 `qwen-asr` |
 
 `models.json` 里还有 `preload` 字段 = 启动默认预载的模型。加模型/改默认只动这一个文件,
 `/v1/models`、`--preload` 默认值、下载脚本的清单都会跟着变。
+
+前两个模型由 `funasr` 内置实现直接加载;**Qwen3-ASR 由 FunASR 经 `qwen-asr` 包(官方推理框架)
+加载, 该包在 setup.sh 里一并安装**。`qwen-asr` 硬性要求 `transformers==4.57.6`,所以 setup.sh
+把 `transformers` / `tokenizers` / `huggingface_hub` 固定在与之兼容的版本上;如果你手工装依赖,
+必须保持这一组版本,否则 FunASR 会以
+`Qwen3-ASR dependency mismatch` 拒绝加载(报 `Qwen3ASRConfig ... thinker_config`)。
+
+设备相关 dtype:Fun-ASR-MLT-Nano 走 `llm_dtype_by_device`,Qwen3-ASR 走 `dtype_by_device`
+(两者都是 "按设备生效的覆盖",只是 FunASR 读取的 kwarg 不同);默认 MPS 上都是 bf16。
+Qwen3-ASR 支持流式,但**网关只做一次性转写**(OpenAI/ferrum 都是整段请求-整段响应),
+未接流式接口;仓促接入需要在 `qwen-asr` 上另写增量循环,当前不做。
 
 ### 一键下载
 
@@ -80,7 +93,7 @@ bench/audio/ja/results.json  # 原始数字, 便于跨版本/跨机器追踪
 
 | 端点 | 协议 | 说明 |
 |---|---|---|
-| `POST /v1/audio/transcriptions` | OpenAI | `-F file=@audio.wav -F model=sensevoice`(或 `fun-asr-mlt-nano`);要分段再加 `-F response_format=verbose_json -F timestamp_granularities[]=segment`(标准 OpenAI 字段;不带方括号的 `timestamp_granularities` 同样接受;不加只返回 `text`) |
+| `POST /v1/audio/transcriptions` | OpenAI | `-F file=@audio.wav -F model=sensevoice`(或 `fun-asr-mlt-nano`/`qwen3-asr-1.7b`/`qwen3-asr-0.6b`);要分段再加 `-F response_format=verbose_json -F timestamp_granularities[]=segment`(标准 OpenAI 字段;不带方括号的 `timestamp_granularities` 同样接受;不加只返回 `text`) |
 | `POST /transcribe` | ferrum | raw body,头 `x-model`/`x-language`(可选语言提示)/`x-compression`(pcm\|wav\|opus)/`x-encrypted`/`x-auth-token`;响应头回显 `x-model`/`x-language` |
 | `POST /v1/translate` | DeepL | header `Authorization: DeepL-Auth-Key {key}` |
 | `POST /translate` | LibreTranslate | body `api_key` 字段 |
@@ -106,8 +119,9 @@ bench/audio/ja/results.json  # 原始数字, 便于跨版本/跨机器追踪
 ## macOS / MPS 内存策略
 
 - `fun-asr-mlt-nano` 的 Qwen 解码器在 MPS 上固定使用 **BF16**。FunASR 的推理路径读取平铺的 `llm_dtype`;若缺失,第一次请求会把解码器转成 FP32,额外常驻约 1 GiB 以上。
+- Qwen3-ASR(1.7B / 0.6B)同样在 MPS 上走 **BF16**,但走的是模型自身的 `dtype` 参数(`models.json` 的 `dtype_by_device`);CPU 上保持加载时的默认精度。
 - 长音频结束后,临时 tensor 虽已释放,MPS caching allocator 仍可能保留数 GiB。网关默认在每次 ASR 请求结束后执行 `torch.mps.empty_cache()`;需要最大化连续请求吞吐时可传 `--no-mps-empty-cache`。
-- 默认只预载并常驻一个模型。需要两个模型常驻时显式运行:
+- 默认只预载并常驻一个模型。需要多个模型常驻时显式运行(注意 Qwen3-ASR-1.7B 显存/内存占用明显更大):
 
 ```bash
 ./run.sh --max-loaded-models 2 --preload fun-asr-mlt-nano sensevoice

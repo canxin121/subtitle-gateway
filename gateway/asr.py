@@ -27,11 +27,27 @@ _MODEL_LOCK = threading.RLock()
 _OPUS_DECODER = None
 
 
+def _runtime_device_override(model_name: str, key: str) -> str | None:
+    """Return a manifest entry's per-device value for `key` on the active device.
+
+    Two override keys exist, matching two different FunASR kwargs:
+      - "llm_dtype_by_device" -> FunASR's `llm_dtype` (LLM-decoder models such as
+        Fun-ASR-MLT-Nano, where the decoder dtype is read on every call).
+      - "dtype_by_device"     -> the loaded model class's own `dtype` kwarg
+        (Qwen3-ASR, which takes bf16 via its FallbackLoader-style constructor).
+    """
+    mapping = MODEL_CONFIGS.get(model_name, {}).get(key, {})
+    return mapping.get(str(get_cfg().device).split(":", 1)[0])
+
+
 def _runtime_llm_dtype(model_name: str) -> str | None:
     """Return the verified LLM dtype override for the active device."""
-    mapping = MODEL_CONFIGS[model_name].get("llm_dtype_by_device", {})
-    device_type = str(get_cfg().device).split(":", 1)[0]
-    return mapping.get(device_type)
+    return _runtime_device_override(model_name, "llm_dtype_by_device")
+
+
+def _runtime_dtype(model_name: str) -> str | None:
+    """Return the loaded model's dtype override for the active device."""
+    return _runtime_device_override(model_name, "dtype_by_device")
 
 
 def _release_mps_cache(*, force: bool = False) -> None:
@@ -119,6 +135,9 @@ def load_model(model_name: str):
         llm_dtype = _runtime_llm_dtype(model_name)
         if llm_dtype:
             cfg["llm_dtype"] = llm_dtype
+        dtype = _runtime_dtype(model_name)
+        if dtype:
+            cfg["dtype"] = dtype
 
         # With a one-model limit, unloading first prevents a model switch from
         # temporarily requiring memory for both models at once.

@@ -48,15 +48,22 @@ fi
 echo "==> installing torch/torchaudio (ASR 必需, funasr 未声明)"
 "${PIP[@]}" "torch==2.13.0" "torchaudio==2.11.0"
 
-# 5) 预下载模型 (清单 = 仓库根 models.json)。ASR 必需; 装完即用, 无网络时跳过。
+# 5) Qwen3-ASR 运行时 (Qwen3-ASR-1.7B / 0.6B 两个模型)。
+#    qwen-asr 硬性要求 transformers==4.57.6, 所以这里连同 tokenizers /
+#    huggingface_hub 一起降到该版本区间 —— 这是 qwen-asr 与 transformers 5.x
+#    的已知冲突, 必须在 funasr 之后、按此顺序装, 否则依赖解析会把 5.x 拉回来。
+echo "==> installing Qwen3-ASR runtime (qwen-asr; pins transformers==4.57.6)"
+"${PIP[@]}" "qwen-asr==0.0.6" "transformers==4.57.6" "tokenizers==0.22.2" "huggingface_hub==0.36.2"
+
+# 6) 预下载模型 (清单 = 仓库根 models.json)。ASR 必需; 装完即用, 无网络时跳过。
 if [ "${SKIP_MODEL_DOWNLOAD:-}" = "1" ]; then
   echo "==> SKIP_MODEL_DOWNLOAD=1, 跳过模型下载 (之后可跑: scripts/run-download.sh)"
 else
-  echo "==> downloading ASR models (models.json; 首次 ~7G, 复用已有缓存)"
+  echo "==> downloading ASR models (models.json; 四个模型首次约 10G, 复用已有缓存)"
   if ! "$VENV/bin/python" scripts/download-models.py; then
     echo "==> WARN: 模型下载失败(网络?), 安装继续。稍后可重试: scripts/run-download.sh" >&2
   fi
 fi
 
 echo "==> done. 启动: ./run.sh"
-echo "==> 本地测速/质量: scripts/run-bench.sh (语料已入库, 无需生成)""
+echo "==> 本地测速/质量: scripts/run-bench.sh (语料已入库, 无需生成)"

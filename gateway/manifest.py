@@ -6,8 +6,10 @@ Both the gateway and the helper scripts read the same file:
   - scripts/download-models.py uses `REQUIRED_MODELS` to download everything
 
 Entry keys the gateway itself consumes and must strip before forwarding to
-FunASR: "languages" (advisory, surfaced by /v1/models), "llm_dtype_by_device"
-(device-specific runtime override) and "note" (human-facing doc).
+FunASR: "languages" (advisory, surfaced by /v1/models), the per-device dtype
+overrides "llm_dtype_by_device" (FunASR's `llm_dtype` decoder dtype, used by the
+LLM-decoder models) and "dtype_by_device" (the model class's own `dtype` kwarg,
+used by Qwen3-ASR), plus "note" (human-facing doc).
 """
 
 import json
@@ -17,7 +19,12 @@ from pathlib import Path
 MANIFEST_FILE = Path(__file__).resolve().parent.parent / "models.json"
 
 # Entry keys owned by the gateway, never passed through to FunASR.
-GATEWAY_META_KEYS = ("languages", "llm_dtype_by_device", "note")
+GATEWAY_META_KEYS = (
+    "languages",
+    "llm_dtype_by_device",
+    "dtype_by_device",
+    "note",
+)
 
 
 def _load() -> dict:
