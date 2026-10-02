@@ -24,6 +24,8 @@ class RuntimeConfig:
     max_loaded_models: int = 1
     mps_empty_cache: bool = True
     cache_dir: Path = field(default_factory=lambda: default_cache_dir())
+    # OpenAI-compatible API
+    openai_api_key: str = ""
     # ferrum protocol
     auth_secret: str = ""
     encryption_key: str = ""
@@ -165,6 +167,11 @@ def parse_args(argv: list[str] | None = None) -> RuntimeConfig:
         help="Model cache dir (MODELSCOPE_CACHE / HF_HOME); default: repo-root/models_cache",
     )
     parser.add_argument(
+        "--openai-api-key",
+        default="",
+        help="Gateway auth for OpenAI-compatible endpoints: clients send Authorization: Bearer {key}; empty disables auth",
+    )
+    parser.add_argument(
         "--auth-secret",
         default="",
         help="Ferrum protocol auth secret (client sends x-auth-token = sha256(secret)); empty disables",
@@ -221,6 +228,7 @@ def parse_args(argv: list[str] | None = None) -> RuntimeConfig:
         max_loaded_models=args.max_loaded_models,
         mps_empty_cache=args.mps_empty_cache,
         cache_dir=resolve_cache_dir(args.cache_dir),
+        openai_api_key=args.openai_api_key,
         auth_secret=args.auth_secret,
         encryption_key=args.encryption_key,
         translate_upstream=args.translate_upstream,

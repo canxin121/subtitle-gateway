@@ -10,7 +10,7 @@ import os
 import tempfile
 import time
 
-from fastapi import FastAPI, File, Form, Request, UploadFile
+from fastapi import Depends, FastAPI, File, Form, HTTPException, Request, UploadFile
 from fastapi.responses import JSONResponse, Response
 
 from . import asr, translate
@@ -19,6 +19,7 @@ from .auth import (
     ferrum_cipher,
     ferrum_decrypt,
     ferrum_encrypt,
+    openai_bearer_auth_ok,
 )
 from .config import apply_cache_env, get_cfg, parse_args, setup_logging
 import gateway.config as _config
@@ -28,7 +29,19 @@ logger = logging.getLogger(__name__)
 app = FastAPI(title="subtitle-gateway", version="1.0.0")
 
 
-@app.post("/v1/audio/transcriptions")
+def require_openai_auth(request: Request) -> None:
+    key = get_cfg().openai_api_key
+    if key and not openai_bearer_auth_ok(
+        request.headers.get("authorization", ""), key
+    ):
+        raise HTTPException(
+            status_code=401,
+            detail="Invalid API key",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+
+@app.post("/v1/audio/transcriptions", dependencies=[Depends(require_openai_auth)])
 async def transcribe(
     file: UploadFile = File(...),
     model: str = Form(default="sensevoice"),
@@ -243,7 +256,7 @@ async def translate_gateway_libretranslate(request: Request):
     return JSONResponse(body, status_code=status, headers=headers)
 
 
-@app.get("/v1/models")
+@app.get("/v1/models", dependencies=[Depends(require_openai_auth)])
 async def list_models():
     """List available models (OpenAI-compatible)."""
     models = []

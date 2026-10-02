@@ -93,11 +93,11 @@ bench/audio/ja/results.json  # 原始数字, 便于跨版本/跨机器追踪
 
 | 端点 | 协议 | 说明 |
 |---|---|---|
-| `POST /v1/audio/transcriptions` | OpenAI | `-F file=@audio.wav -F model=sensevoice`(或 `fun-asr-mlt-nano`/`qwen3-asr-1.7b`/`qwen3-asr-0.6b`);要分段再加 `-F response_format=verbose_json -F timestamp_granularities[]=segment`(标准 OpenAI 字段;不带方括号的 `timestamp_granularities` 同样接受;不加只返回 `text`) |
+| `POST /v1/audio/transcriptions` | OpenAI | `-F file=@audio.wav -F model=sensevoice`(或 `fun-asr-mlt-nano`/`qwen3-asr-1.7b`/`qwen3-asr-0.6b`);要分段再加 `-F response_format=verbose_json -F timestamp_granularities[]=segment`(标准 OpenAI 字段;不带方括号的 `timestamp_granularities` 同样接受;不加只返回 `text`);配置 `--openai-api-key` 后需传 `Authorization: Bearer {key}` |
 | `POST /transcribe` | ferrum | raw body,头 `x-model`/`x-language`(可选语言提示)/`x-compression`(pcm\|wav\|opus)/`x-encrypted`/`x-auth-token`;响应头回显 `x-model`/`x-language` |
 | `POST /v1/translate` | DeepL | header `Authorization: DeepL-Auth-Key {key}` |
 | `POST /translate` | LibreTranslate | body `api_key` 字段 |
-| `GET /v1/models` | OpenAI | 可用模型列表(每条含 `languages` 支持语言提示) |
+| `GET /v1/models` | OpenAI | 可用模型列表(每条含 `languages` 支持语言提示);配置 `--openai-api-key` 后需传 `Authorization: Bearer {key}` |
 | `GET /health` | - | 健康检查 |
 
 ## CLI 参数
@@ -110,6 +110,7 @@ bench/audio/ja/results.json  # 原始数字, 便于跨版本/跨机器追踪
 | `--max-loaded-models` | `1` | 最多常驻 ASR 模型数;切换时按 LRU 释放不再使用的模型;`0` 表示不限,`2` 可让两个模型同时常驻 |
 | `--mps-empty-cache` / `--no-mps-empty-cache` | 开启 | MPS 每次转写后释放空闲 allocator cache;关闭可偏向连续请求吞吐,但长音频后内存会保持在高水位 |
 | `--cache-dir` | 仓库根 `models_cache/` | 模型缓存目录(设 MODELSCOPE_CACHE + HF_HOME) |
+| `--openai-api-key` | `""` | OpenAI 兼容接口鉴权;配置后 `/v1/audio/transcriptions` 和 `/v1/models` 都要求 `Authorization: Bearer {key}`;留空时不鉴权 |
 | `--auth-secret` | `""` | ferrum 鉴权(客户端发 `x-auth-token = sha256(secret)`) |
 | `--encryption-key` | `""` | ferrum AES-256-GCM 口令 |
 | `--translate-upstream` / `-key` / `-api-key` | `""` | DeepL 网关:上游基址 / 发给上游的 key / 网关鉴权 key |

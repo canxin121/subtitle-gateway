@@ -19,6 +19,16 @@ def ct_compare(a: str, b: str) -> bool:
     return sum(x != y for x, y in zip(a, b)) == 0
 
 
+def openai_bearer_auth_ok(authorization: str, expected_key: str) -> bool:
+    """Check an OpenAI-compatible Authorization: Bearer header."""
+    parts = authorization.split()
+    return (
+        len(parts) == 2
+        and parts[0].lower() == "bearer"
+        and ct_compare(parts[1], expected_key)
+    )
+
+
 def ferrum_auth_token(secret: str) -> str:
     """Same derivation as Rust AuthToken::from_secret: hex(sha256(secret))."""
     return hashlib.sha256(secret.encode("utf-8")).hexdigest()
